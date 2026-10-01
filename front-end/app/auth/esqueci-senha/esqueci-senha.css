@@ -1,0 +1,354 @@
+/* ==========================================================================
+   Recuperação de senha (esqueci-senha) — prefixo rx-
+   Reaproveita os campos/botão/alertas de auth.css (ax-*), mas com uma
+   composição própria: tela branca, mobile-first, botão fixo no rodapé.
+   ========================================================================== */
+
+.ax-root.rx-root {
+  --rx-lavender: #efe8ff;
+  --rx-lavender-2: #e9e3fa;
+  --rx-field-bg: #fafafc;
+  --rx-danger: #e11d48;
+  --rx-danger-text: #be123c;
+  --rx-danger-bg: #fff5f7;
+
+  display: block;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 0;
+  overflow-x: hidden;
+  background: #fff;
+}
+
+/* --------------------------------------------------------------------------
+   Tela
+   -------------------------------------------------------------------------- */
+.rx-screen {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 22px 28px calc(24px + env(safe-area-inset-bottom));
+  overflow: hidden;
+  background: #fff;
+}
+
+/* Círculos decorativos no canto superior direito */
+.rx-deco {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 130px;
+  pointer-events: none;
+}
+.rx-deco-a,
+.rx-deco-b {
+  position: absolute;
+  border-radius: 999px;
+}
+.rx-deco-a {
+  top: -110px;
+  right: -60px;
+  width: 210px;
+  height: 210px;
+  background: var(--rx-lavender);
+}
+.rx-deco-b {
+  top: -80px;
+  right: -90px;
+  width: 190px;
+  height: 190px;
+  background: linear-gradient(160deg, #7a3cf0 0%, #6b21e0 100%);
+}
+
+.rx-top {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+.rx-back {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 0 0 -10px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ax-ink);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.rx-back:hover {
+  background: var(--ax-soft);
+}
+
+/* Indicador de etapas: 3 traços */
+.rx-steps {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.rx-step {
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--rx-lavender-2);
+  transition: background-color 0.3s ease;
+}
+.rx-step.is-on {
+  background: var(--ax-violet);
+}
+
+/* --------------------------------------------------------------------------
+   Conteúdo
+   -------------------------------------------------------------------------- */
+.rx-body {
+  animation: rxStepIn 0.28s ease-out both;
+}
+.rx-illus {
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  margin: 34px auto 36px;
+  border-radius: 999px;
+  background: var(--rx-lavender);
+}
+.rx-title {
+  margin: 0;
+  font-family: var(--ax-display);
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  color: var(--ax-ink);
+}
+.rx-lead {
+  margin: 12px 0 0;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ax-muted);
+}
+.rx-strong {
+  font-weight: 700;
+  color: var(--ax-ink);
+  overflow-wrap: anywhere;
+}
+.rx-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 28px;
+}
+
+/* Campos (ajustes sobre auth.css) */
+.rx-root .ax-label {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.rx-root .ax-input {
+  height: 52px;
+  border-radius: 14px;
+  background: var(--rx-field-bg);
+}
+/* Sem ícone à esquerda (campos de senha), o texto começa junto à borda */
+.rx-root .ax-control > .ax-input:first-child {
+  padding-left: 18px;
+}
+.ax-root.rx-root .ax-input:focus,
+.ax-root.rx-root .ax-input:focus-visible {
+  border-radius: 14px;
+  background: #fff;
+}
+.rx-root .ax-input[aria-invalid="true"] {
+  border-color: var(--rx-danger);
+  background: var(--rx-danger-bg);
+}
+.ax-root.rx-root .ax-input[aria-invalid="true"]:focus {
+  border-color: var(--rx-danger);
+  box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.12);
+}
+.rx-root .ax-field-error {
+  margin-top: 8px;
+  font-size: 13.5px;
+  color: var(--rx-danger-text);
+}
+
+/* Código de 6 dígitos */
+.rx-otp-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.rx-otp {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 9px;
+}
+.rx-otp-cell {
+  width: 100%;
+  min-width: 0;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--ax-line);
+  border-radius: 12px;
+  background: var(--rx-field-bg);
+  text-align: center;
+  font-family: var(--ax-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ax-ink);
+  caret-color: var(--ax-violet);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.rx-otp-cell.is-filled {
+  border-color: var(--ax-line-strong);
+  background: #fff;
+}
+.ax-root.rx-root .rx-otp-cell:focus,
+.ax-root.rx-root .rx-otp-cell:focus-visible {
+  border: 2px solid var(--ax-violet);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(124, 60, 245, 0.14);
+  outline: none;
+}
+.rx-otp-cell[aria-invalid="true"] {
+  border-color: var(--rx-danger);
+  background: var(--rx-danger-bg);
+}
+.rx-hint {
+  margin: 12px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ax-muted);
+}
+.rx-hint.is-error {
+  color: var(--rx-danger-text);
+}
+.rx-hint.is-success {
+  color: #067647;
+}
+
+/* --------------------------------------------------------------------------
+   Rodapé: botão principal + link
+   -------------------------------------------------------------------------- */
+.rx-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: auto;
+  padding-top: 32px;
+}
+.rx-root .ax-btn {
+  height: 56px;
+  border-radius: 16px;
+  font-size: 16.5px;
+  box-shadow: 0 16px 30px -14px rgba(107, 33, 224, 0.65);
+}
+.ax-root.rx-root .ax-btn:focus-visible {
+  border-radius: 16px;
+}
+.rx-foot-text {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--ax-muted);
+}
+.rx-link {
+  font-weight: 600;
+  color: var(--ax-violet);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.rx-link:hover {
+  color: var(--ax-violet-deep);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rx-link-btn {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rx-link-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.rx-wait {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ax-ink);
+}
+
+@keyframes rxStepIn {
+  from { opacity: 0; transform: translateX(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ==========================================================================
+   Responsivo
+   ========================================================================== */
+
+/* Celulares pequenos / telas baixas */
+@media (max-width: 359px) {
+  .rx-screen { padding-left: 20px; padding-right: 20px; }
+  .rx-otp { gap: 6px; }
+  .rx-otp-cell { height: 48px; font-size: 19px; }
+}
+@media (max-height: 700px) {
+  .rx-illus { width: 104px; height: 104px; margin: 20px auto 24px; }
+  .rx-illus svg { width: 70px; height: 70px; }
+  .rx-fields { margin-top: 22px; }
+}
+
+/* Tablet e desktop: a tela vira um cartão centralizado sobre fundo lavanda */
+@media (min-width: 640px) {
+  .ax-root.rx-root {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+    background:
+      radial-gradient(50% 45% at 10% 0%, rgba(157, 111, 255, 0.22), transparent 70%),
+      radial-gradient(45% 45% at 100% 100%, rgba(142, 163, 242, 0.28), transparent 70%),
+      #f6f3ff;
+  }
+  .rx-screen {
+    max-width: 460px;
+    min-height: min(820px, calc(100dvh - 80px));
+    padding: 30px 40px 36px;
+    border: 1px solid #ece7fb;
+    border-radius: 36px;
+    box-shadow:
+      0 40px 80px -40px rgba(40, 20, 110, 0.35),
+      0 12px 28px -16px rgba(40, 20, 110, 0.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rx-body { animation: none; }
+  .rx-step,
+  .rx-otp-cell,
+  .rx-back,
+  .rx-link { transition: none; }
+}

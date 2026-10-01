@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR"
+      xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Redefinição de Senha</title>
+
+    <style>
+        *{
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+        }
+
+        body{
+            font-family:Arial, Helvetica, sans-serif;
+            background:#f4f6f9;
+            color:#333;
+            padding:40px 20px;
+        }
+
+        .container{
+            max-width:600px;
+            margin:auto;
+            background:#fff;
+            border-radius:12px;
+            overflow:hidden;
+            box-shadow:0 8px 20px rgba(0,0,0,.08);
+        }
+
+        .header{
+            background:#0F4C81;
+            color:#fff;
+            text-align:center;
+            padding:30px;
+        }
+
+        .header h1{
+            font-size:28px;
+        }
+
+        .content{
+            padding:40px;
+            line-height:1.7;
+        }
+
+        .content h2{
+            margin-bottom:15px;
+            color:#0F4C81;
+        }
+
+        .codigo{
+            margin:30px 0;
+            text-align:center;
+            font-size:36px;
+            font-weight:bold;
+            letter-spacing:8px;
+            color:#0F4C81;
+            background:#eef5fb;
+            padding:20px;
+            border-radius:10px;
+        }
+
+        .alerta{
+            margin-top:20px;
+            padding:15px;
+            background:#FFF8E5;
+            border-left:5px solid #FFC107;
+            color:#555;
+            font-size:14px;
+        }
+
+        .footer{
+            padding:25px;
+            text-align:center;
+            font-size:13px;
+            color:#777;
+            background:#fafafa;
+            border-top:1px solid #eee;
+        }
+
+        a{
+            color:#0F4C81;
+            text-decoration:none;
+        }
+    </style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>PitcherX</h1>
+    </div>
+
+    <div class="content">
+
+        <h2>Olá, <span th:text="${nome}">Usuário</span>!</h2>
+
+        <p>
+            Recebemos uma solicitação para redefinir a senha da sua conta.
+        </p>
+
+        <p>
+            Utilize o código abaixo para continuar o processo:
+        </p>
+
+        <div class="codigo"
+             th:text="${codigoRedefinicao}">
+            123456
+        </div>
+
+        <p>
+            Caso você não tenha solicitado essa alteração, ignore este e-mail.
+            Nenhuma modificação será realizada em sua conta.
+        </p>
+
+        <div class="alerta">
+            Este código é pessoal e expira em poucos minutos.
+            Nunca compartilhe este código com outras pessoas.
+        </div>
+
+    </div>
+
+    <div class="footer">
+        <p>
+            © <span th:text="${ano}">2026</span> PitcherX.
+            Todos os direitos reservados.
+        </p>
+
+        <p>
+            Este é um e-mail automático. Não responda esta mensagem.
+        </p>
+
+    </div>
+
+</div>
+
+</body>
+</html>

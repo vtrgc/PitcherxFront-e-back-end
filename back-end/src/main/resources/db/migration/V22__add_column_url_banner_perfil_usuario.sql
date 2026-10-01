@@ -1,0 +1,1 @@
+ALTER TABLE perfil_usuario ADD COLUMN url_banner_perfil VARCHAR(255);
