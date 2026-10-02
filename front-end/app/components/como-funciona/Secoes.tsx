@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Cabecalho from "./Cabecalho";
+import FundoHero, { RostosComunidade } from "./FundoHero";
 import CartoesApp from "./CartoesApp";
 import AcoesSessao from "./AcoesSessao";
 import LinkAnimada from "./LinkAnimada";
@@ -33,19 +34,22 @@ function Rotulo({ children, id }: { children: string; id?: string }) {
 // ------------------------------------------------------------------ hero
 export function Hero() {
   return (
-    <section className="cf-hero" aria-labelledby="cf-titulo">
-      <Imagem imagem={IMAGENS.telhado} sizes="100vw" prioridade decorativa className="cf-hero-foto" />
-      <div className="cf-hero-veu" aria-hidden="true" />
+    <>
       <Cabecalho />
-      <div className="cf-hero-conteudo" id="conteudo">
-        <h1 id="cf-titulo" className="cf-hero-titulo">
-          {HERO.titulo[0]} <span className="cf-quebra">{HERO.titulo[1]}</span>
-        </h1>
-        <p className="cf-hero-apoio">{HERO.apoio}</p>
-        <AcoesSessao secundario="animada" tema="escuro" />
-      </div>
-      <CartoesApp nota={HERO.nota} />
-    </section>
+      <section className="cf-hero ap-hero" aria-labelledby="cf-titulo">
+        <FundoHero />
+        <div className="ap-texto" id="conteudo">
+          <RostosComunidade />
+          <p className="ap-nome">PitcherX</p>
+          <h1 id="cf-titulo" className="ap-titulo">
+            {HERO.titulo.join(" ")}
+          </h1>
+          <p className="ap-apoio">{HERO.apoio}</p>
+          <AcoesSessao secundario="animada" />
+        </div>
+        <CartoesApp nota={HERO.nota} />
+      </section>
+    </>
   );
 }
 
@@ -137,7 +141,11 @@ export function Passos() {
 }
 
 // ------------------------------------------------------------------ ferramentas
-const ICONES_FERRAMENTAS: Record<string, LucideIcon> = { propostas: FileText, contratos: FileSignature, perfil: IdCard };
+const ICONES_FERRAMENTAS: Record<string, LucideIcon> = {
+  propostas: FileText,
+  contratos: FileSignature,
+  perfil: IdCard,
+};
 
 export function Ferramentas() {
   return (

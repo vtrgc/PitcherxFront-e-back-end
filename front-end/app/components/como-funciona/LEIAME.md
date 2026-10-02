@@ -21,3 +21,9 @@ tem "movimento reduzido" no sistema ou está sem JavaScript.
 Renderizações 3D feitas para esta página (Blender/Cycles), sem pessoas e sem texto:
 `telhado` (hero, 16:9 e 9:16), `caderno` (4:5), `conversa` (3:4) e `planta` (esboço a lápis,
 fundo do chamado final). AVIF + WebP em várias larguras (`imagens.ts`).
+
+## Fotos do hero (Unsplash)
+
+O topo da página usa fotos reais de pessoas do Unsplash (licença Unsplash, uso livre), carregadas
+direto do CDN `images.unsplash.com` (já liberado em `next.config.js`). Lista, recortes e créditos dos
+fotógrafos em `fotosHero.ts`; montagem em `FundoHero.tsx` (mural só aparece a partir de 1200px).

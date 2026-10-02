@@ -9,9 +9,8 @@
 
 export const HERO = {
   titulo: ["Onde ideias encontram", "quem vai construí-las."],
-  apoio:
-    "No PitcherX você transforma uma ideia em projeto, publica para a comunidade e monta a equipe que vai tirá-la do papel.",
-  nota: "Interface ilustrativa · dados fictícios",
+  apoio: "Transforme uma ideia em projeto, publique para a comunidade e monte a equipe certa.",
+  nota: "Passe o mouse sobre uma tela para ver de perto. Interface ilustrativa, dados fictícios.",
 };
 
 export const FAIXA = {
