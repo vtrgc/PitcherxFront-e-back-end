@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { FileSignature, ArrowLeft, Pencil, Trash2, Loader2, Briefcase, ScrollText } from "lucide-react";
+import { FileSignature, ArrowLeft, Pencil, Trash2, Loader2, Briefcase, ScrollText, Lock } from "lucide-react";
 
 import PageShell from "../../components/PageShell";
 import EmptyState from "../../components/EmptyState";
@@ -20,7 +20,8 @@ import { Termo } from "../../types/Termo";
 import { buscarContrato, atualizarContrato, excluirContrato } from "../../services/contrato.service";
 import { buscarProjeto } from "../../services/projeto.service";
 import { listarTermos } from "../../services/termo.service";
-import { listarIdsProjetosCriados } from "../../services/projetoUsuario.service";
+import { ehParteDoContrato, listarPorUsuario } from "../../services/projetoUsuario.service";
+import { TIPO_VINCULO_ID } from "../../types/ProjetoUsuario";
 
 export default function ContratoDetalhePage() {
   const params = useParams();
@@ -34,6 +35,8 @@ export default function ContratoDetalhePage() {
   const [termos, setTermos] = useState<Termo[]>([]);
   const [erroTermos, setErroTermos] = useState(false);
   const [ehDono, setEhDono] = useState(false);
+  // Contratos são visíveis só para as partes do projeto (criador, sócio, investidor) e o admin.
+  const [semAcesso, setSemAcesso] = useState(false);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
   const [naoEncontrado, setNaoEncontrado] = useState(false);
@@ -50,18 +53,25 @@ export default function ContratoDetalhePage() {
     setLoading(true);
     setErro("");
     setNaoEncontrado(false);
+    setSemAcesso(false);
     try {
       const dados = await buscarContrato(id);
+      // Permissão primeiro: sem confirmar o vínculo, o conteúdo não é exibido.
+      if (!isAdmin) {
+        const meusVinculos = (await listarPorUsuario(usuario.idUsuario)) ?? [];
+        const doProjeto = meusVinculos.filter((v) => v.projetoId === dados.projetoId);
+        if (!ehParteDoContrato(doProjeto, usuario.idUsuario)) {
+          setContrato(null);
+          setSemAcesso(true);
+          return;
+        }
+        setEhDono(doProjeto.some((v) => v.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR));
+      }
       setContrato(dados);
-      const [rProjeto, rTermos, rMeus] = await Promise.allSettled([
-        buscarProjeto(dados.projetoId),
-        listarTermos(),
-        isAdmin ? Promise.resolve(new Set<number>()) : listarIdsProjetosCriados(usuario.idUsuario),
-      ]);
+      const [rProjeto, rTermos] = await Promise.allSettled([buscarProjeto(dados.projetoId), listarTermos()]);
       setProjeto(rProjeto.status === "fulfilled" ? rProjeto.value : null);
       setTermos(rTermos.status === "fulfilled" ? (rTermos.value ?? []).filter((t) => t.contratoId === id) : []);
       setErroTermos(rTermos.status !== "fulfilled");
-      setEhDono(rMeus.status === "fulfilled" && rMeus.value.has(dados.projetoId));
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) setNaoEncontrado(true);
       else setErro(mensagemErro(error, "Não foi possível carregar este contrato."));
@@ -129,6 +139,14 @@ export default function ContratoDetalhePage() {
       ) : naoEncontrado ? (
         <div className={cls.card}>
           <EmptyState icon={FileSignature} title="Contrato não encontrado" />
+        </div>
+      ) : semAcesso ? (
+        <div className={cls.card}>
+          <EmptyState
+            icon={Lock}
+            title="Acesso restrito"
+            description="Este contrato faz parte do registro de autoria (verificador antiplágio) de um projeto. Somente o criador, os sócios, os investidores do projeto e a administração podem vê-lo."
+          />
         </div>
       ) : erro ? (
         <Alerta onTentarNovamente={carregar}>{erro}</Alerta>

@@ -9,6 +9,8 @@ import PageShell from "../components/PageShell";
 import EmptyState from "../components/EmptyState";
 import FormProjeto from "../components/FormProjeto";
 import ImagemRemota from "../components/ImagemRemota";
+import ResumoFinanceiroMini from "../components/projeto/ResumoFinanceiroMini";
+import { ROTULO_SITUACAO, linhaDoTempo } from "../lib/projeto";
 import SearchBar from "../components/SearchBar";
 import { CardGridSkeleton } from "../components/Skeleton";
 import Alerta from "../components/ui/Alerta";
@@ -91,9 +93,13 @@ export default function ProjetosPage() {
         const unidos = new Map<number, Projeto>();
         listas.flat().forEach((p) => unidos.set(p.idProjeto, p));
         // "Até" sem "De" não é aplicado pelo backend: completamos no cliente.
+        const termoMinusculo = termo.toLowerCase();
         const filtrados = [...unidos.values()].filter((p) => {
           const inicio = apiDateToInput(p.dataInicioProjeto);
-          return (!dataDe || inicio >= dataDe) && (!dataAte || inicio <= dataAte);
+          // A busca do servidor também olha a ficha financeira guardada na descrição:
+          // conferimos o termo só no nome e no texto visível.
+          const casaTermo = !termo || `${p.nomeProjeto} ${p.descricaoProjeto}`.toLowerCase().includes(termoMinusculo);
+          return casaTermo && (!dataDe || inicio >= dataDe) && (!dataAte || inicio <= dataAte);
         });
         if (!cancelado) setResultadoBusca(filtrados.sort((a, b) => b.idProjeto - a.idProjeto));
       } catch (error) {
@@ -272,8 +278,10 @@ export default function ProjetosPage() {
             >
               <div className="relative h-32 w-full bg-brand-gradient-soft">
                 <ImagemRemota url={projeto.urlImagemProjeto} alt="" />
-                <span className={`${projeto.active ? cls.chipAtivo : cls.chipInativo} absolute right-3 top-3 shadow-soft`}>
-                  {projeto.active ? "Ativo" : "Inativo"}
+                <span
+                  className={`${linhaDoTempo(projeto).situacao === "em_andamento" ? cls.chipAtivo : cls.chipInativo} absolute right-3 top-3 shadow-soft`}
+                >
+                  {ROTULO_SITUACAO[linhaDoTempo(projeto).situacao]}
                 </span>
                 {meus.has(projeto.idProjeto) && (
                   <span className={`${cls.chip} absolute left-3 top-3 shadow-soft`}>Seu projeto</span>
@@ -286,6 +294,7 @@ export default function ProjetosPage() {
                   {projeto.nomeProjeto}
                 </h3>
                 <p className={`${cls.texto} mt-1.5 line-clamp-3 break-words`}>{projeto.descricaoProjeto}</p>
+                <ResumoFinanceiroMini ficha={projeto.ficha} className="mt-3" />
                 <div className="text-[0.8125rem] text-ink-500 mt-4 flex items-center gap-1.5">
                   <Calendar size={13} aria-hidden="true" />
                   {projeto.dataInicioProjeto} — {projeto.dataFimProjeto}

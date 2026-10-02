@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { curtirConteudo, descurtirConteudo, buscarStatusCurtida, TIPO_CONTEUDO } from "../services/curtida.service";
 import { mensagemErro } from "../lib/api";
@@ -21,6 +21,16 @@ export function useCurtida(
   const enviandoRef = useRef(false);
 
   const tipoConteudoId = TIPO_CONTEUDO[tipoConteudo];
+
+  // A lista recarregada (ex.: feed atualizado) traz contagens novas: mantém o card em dia.
+  const totalInicial = inicial?.total;
+  const curtidoInicial = inicial?.curtido;
+  useEffect(() => {
+    if (totalInicial !== undefined && !enviandoRef.current) setTotalCurtidas(totalInicial);
+  }, [totalInicial]);
+  useEffect(() => {
+    if (curtidoInicial !== undefined && !enviandoRef.current) setCurtido(curtidoInicial);
+  }, [curtidoInicial]);
 
   const carregar = useCallback(async () => {
     if (!usuario) {

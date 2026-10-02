@@ -2,12 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Heart, MessageCircle, Share2, MoreHorizontal, ChevronUp, Pencil, Trash2, Loader2, Save, X, ImageOff } from "lucide-react";
+import { Heart, MessageCircle, Share2, MoreHorizontal, ChevronUp, Pencil, Trash2, Loader2, Save, X, ImageOff, Flag } from "lucide-react";
 
 import { useUsuario } from "../hook/useUsuario";
 import { useAuth } from "../context/AuthContext";
 import { useCurtida } from "../hook/useCurtida";
 import { useComentarios } from "../hook/useComentarios";
+import { useDenuncia } from "../hook/useDenuncia";
+import type { ConexoesUsuario } from "../hook/useConexao";
+import BotaoConexao from "./conexao/BotaoConexao";
 import { atualizarPostagem, excluirPostagem, removerImagensPostagem, substituirImagensPostagem } from "../services/postagem.service";
 import { mensagemErro } from "../lib/api";
 import { dataPostagemHoje } from "../lib/date";
@@ -15,6 +18,8 @@ import { imagensDaGaleria } from "../lib/galeria";
 import { LIMITES } from "../lib/limites";
 import { Post } from "../types/Post";
 import ComentarioCard from "./ComentarioCard";
+import ConteudoOcultado from "./denuncia/ConteudoOcultado";
+import ModalDenuncia from "./denuncia/ModalDenuncia";
 import CriarComentario from "./CriarComentario";
 import GaleriaImagens from "./GaleriaImagens";
 import SeletorImagens from "./SeletorImagens";
@@ -31,9 +36,23 @@ interface Props {
   onExcluido?: () => void;
   /** Abre os comentários já carregados (página da postagem). */
   comentariosAbertos?: boolean;
+  /**
+   * Conexões do usuário logado (feed/página da publicação): mostra Seguir/Seguindo do autor
+   * no cabeçalho, com o mesmo estado das demais telas.
+   */
+  conexoes?: ConexoesUsuario | null;
 }
 
-export default function PostCard({ post, onUpdate, onExcluido, comentariosAbertos = false }: Props) {
+/** Link público de uma postagem. Usa SEMPRE o ID da postagem (nunca o de um comentário). */
+export function linkDaPostagem(idPostagem: number, origem = typeof window !== "undefined" ? window.location.origin : ""): string {
+  return `${origem}/publicacao/${idPostagem}`;
+}
+
+function plural(n: number, singular: string, pluralTexto: string) {
+  return `${n.toLocaleString("pt-BR")} ${n === 1 ? singular : pluralTexto}`;
+}
+
+export default function PostCard({ post, onUpdate, onExcluido, comentariosAbertos = false, conexoes }: Props) {
   const { usuario: usuarioLogado, isAdmin } = useAuth();
   const { notificar, confirmar } = useFeedback();
   const { usuario: autor, indisponivel } = useUsuario(post.usuarioId);
@@ -58,6 +77,7 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
   const menuRef = useRef<HTMLDivElement>(null);
 
   const comentarios = useComentarios(post.idPostagem, { automatico: comentariosAbertos });
+  const denuncia = useDenuncia("POSTAGEM", post.idPostagem);
 
   // Se o feed não trouxe o status de curtida, busca individualmente.
   useEffect(() => {
@@ -87,6 +107,8 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
   const podeExcluir = ehAutor || isAdmin;
   // PUT/DELETE /postagem/{id}/imagens: autor ou ADMIN (validado no servidor).
   const podeGerenciarImagens = ehAutor || isAdmin;
+  // Denunciar: qualquer conta comum que não seja a autora (o admin modera direto).
+  const podeDenunciar = denuncia.podeDenunciar && !ehAutor && !isAdmin;
   const imagens = imagensDaGaleria(post.imagens, post.urlImagemPostagem);
 
   function alternarComentarios() {
@@ -96,7 +118,7 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
   }
 
   async function handleCompartilhar() {
-    const url = `${window.location.origin}/comentarios/${post.idPostagem}`;
+    const url = linkDaPostagem(post.idPostagem);
     try {
       if (navigator.share) {
         await navigator.share({ title: post.tituloPostagem, url });
@@ -186,7 +208,17 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
 
   const nomeAutor = autor?.nomeUsuario || (indisponivel ? `Usuário #${post.usuarioId}` : "Carregando...");
   const handle = autor?.emailUsuario ? autor.emailUsuario.split("@")[0] : null;
+  // Antes de abrir: contagem que veio com a lista (GET /comentario). Depois: a lista carregada.
+  const qtdComentarios = comentarios.carregado ? comentarios.comentarios.length : post.totalComentarios;
   const totalComentarios = comentarios.comentarios.length;
+
+  if (podeDenunciar && denuncia.denunciado) {
+    return (
+      <article className="py-6 border-b border-ink-100 first:pt-1 last:border-b-0">
+        <ConteudoOcultado nome="esta publicação" onDesfazer={denuncia.desfazer} />
+      </article>
+    );
+  }
 
   return (
     <article className="relative py-6 border-b border-ink-100 transition-colors first:pt-1 last:border-b-0" aria-busy={excluindo}>
@@ -209,7 +241,19 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
           </div>
         </div>
 
-        {(podeEditar || podeExcluir || (podeGerenciarImagens && imagens.length > 0)) && (
+        <div className="flex shrink-0 items-center gap-1.5">
+        {conexoes && usuarioLogado && !ehAutor && !isAdmin && autor && !conexoes.carregando && !conexoes.erro && (
+          <BotaoConexao
+            compacto
+            relacao={conexoes.relacaoCom(post.usuarioId)}
+            ocupado={conexoes.ocupado(post.usuarioId)}
+            mostrarResposta={false}
+            onSeguir={() => conexoes.seguir({ id: post.usuarioId, nome: autor.nomeUsuario })}
+            onDeixarDeSeguir={() => conexoes.deixarDeSeguir({ id: post.usuarioId, nome: autor.nomeUsuario })}
+            onCancelar={() => conexoes.cancelarSolicitacao({ id: post.usuarioId, nome: autor.nomeUsuario })}
+          />
+        )}
+        {(podeEditar || podeExcluir || podeDenunciar || (podeGerenciarImagens && imagens.length > 0)) && (
           <div className="relative" ref={menuRef}>
             <button
               type="button"
@@ -260,11 +304,26 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
                     <Trash2 size={15} aria-hidden="true" /> Excluir
                   </button>
                 )}
+                {podeDenunciar && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuAberto(false);
+                      denuncia.abrir();
+                    }}
+                    className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13.5px] font-medium text-red-600 hover:bg-red-50"
+                  >
+                    <Flag size={15} aria-hidden="true" /> Denunciar publicação
+                  </button>
+                )}
               </div>
             )}
           </div>
         )}
+        </div>
       </header>
+      <ModalDenuncia tipo="POSTAGEM" conteudoId={post.idPostagem} aberto={denuncia.modalAberto} onFechar={denuncia.fechar} />
 
       {editando ? (
         <form
@@ -342,14 +401,18 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
           onClick={curtida.alternarCurtida}
           disabled={curtida.enviando || !usuarioLogado}
           aria-pressed={curtida.curtido}
-          aria-label={`${curtida.curtido ? "Descurtir" : "Curtir"} (${curtida.totalCurtidas} curtida${curtida.totalCurtidas === 1 ? "" : "s"})`}
+          aria-label={`${curtida.curtido ? "Descurtir" : "Curtir"} (${plural(curtida.totalCurtidas, "curtida", "curtidas")})`}
+          title={curtida.curtido ? "Remover curtida" : "Curtir"}
           className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-[13px] font-semibold transition-colors disabled:cursor-not-allowed ${
             curtida.curtido ? "text-red-600" : "text-ink-500 hover:bg-ink-50 disabled:opacity-60"
           }`}
         >
           <Heart size={18} className={curtida.curtido ? "fill-red-500 text-red-500" : ""} strokeWidth={1.75} aria-hidden="true" />
-          <span className="hidden sm:inline">{curtida.curtido ? "Curtido" : "Curtir"}</span>
-          {curtida.totalCurtidas > 0 && <span className="text-ink-500">{curtida.totalCurtidas}</span>}
+          {curtida.carregando ? (
+            <span className={`${cls.skeleton} inline-block h-3.5 w-16 rounded`} aria-label="Carregando curtidas" />
+          ) : (
+            <span>{plural(curtida.totalCurtidas, "curtida", "curtidas")}</span>
+          )}
         </button>
 
         <button
@@ -361,8 +424,7 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
           }`}
         >
           <MessageCircle size={18} strokeWidth={1.75} aria-hidden="true" />
-          <span className="hidden sm:inline">Comentários</span>
-          {comentarios.carregado && totalComentarios > 0 && <span>{totalComentarios}</span>}
+          <span>{qtdComentarios === undefined ? "Comentários" : plural(qtdComentarios, "comentário", "comentários")}</span>
         </button>
 
         <button

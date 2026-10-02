@@ -15,6 +15,7 @@ import { cls } from "../components/ui/estilos";
 import { Post } from "../types/Post";
 import { listarPostagensComCurtidas } from "../services/postagem.service";
 import { useAuth } from "../context/AuthContext";
+import { useMinhasConexoes } from "../hook/useConexao";
 import { mensagemErro } from "../lib/api";
 
 const POR_PAGINA = 10;
@@ -31,6 +32,8 @@ export default function FeedPage() {
   const [limite, setLimite] = useState(POR_PAGINA);
   const { isAuthenticated, usuario, isAdmin } = useAuth();
   const idUsuario = usuario?.idUsuario ?? null;
+  // Uma única carga das minhas conexões para os botões Seguir/Seguindo de todos os autores.
+  const conexoes = useMinhasConexoes({ automatico: isAuthenticated && !isAdmin });
 
   const carregarPosts = useCallback(async () => {
     setLoading(true);
@@ -104,7 +107,7 @@ export default function FeedPage() {
       ) : (
         <div>
           {visiveis.map((post) => (
-            <PostCard key={post.idPostagem} post={post} onUpdate={carregarPosts} />
+            <PostCard key={post.idPostagem} post={post} onUpdate={carregarPosts} conexoes={isAdmin ? null : conexoes} />
           ))}
           {postsFiltrados.length > limite && (
             <div className="flex justify-center pt-4">

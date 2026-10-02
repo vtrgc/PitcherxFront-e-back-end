@@ -2,6 +2,7 @@ import { api, mapComLimite } from "../lib/api";
 import { Post } from "../types/Post";
 import { PostagemRequest } from "../types/PostagemRequest";
 import { buscarStatusCurtida, TIPO_CONTEUDO } from "./curtida.service";
+import { listarComentarios } from "./comentario.service";
 
 export function listarPostagens() {
   return api<Post[]>("/postagem");
@@ -21,11 +22,35 @@ async function comCurtidas(posts: Post[], usuarioId: number | null): Promise<Pos
   });
 }
 
-/** Lista as postagens (mais recentes primeiro) com as curtidas já resolvidas. */
+/**
+ * Anexa a quantidade de comentários de cada postagem. A API não tem contagem por postagem,
+ * só a listagem geral `GET /comentario` (uma única chamada para todas as postagens).
+ * Se a listagem falhar, os posts seguem sem contagem (o card mostra quando abrir).
+ */
+async function comComentarios(posts: Post[]): Promise<Post[]> {
+  if (posts.length === 0) return posts;
+  let comentarios;
+  try {
+    comentarios = (await listarComentarios()) ?? [];
+  } catch {
+    return posts;
+  }
+  const porPostagem = new Map<number, number>();
+  for (const c of comentarios) porPostagem.set(c.postagemId, (porPostagem.get(c.postagemId) ?? 0) + 1);
+  return posts.map((post) => ({ ...post, totalComentarios: porPostagem.get(post.idPostagem) ?? 0 }));
+}
+
+/** Curtidas (total e se eu curti) e quantidade de comentários de uma lista de postagens. */
+export async function detalharPostagens(posts: Post[], usuarioId: number | null): Promise<Post[]> {
+  const [comContagem, comStatus] = await Promise.all([comComentarios(posts), comCurtidas(posts, usuarioId)]);
+  return comStatus.map((post, i) => ({ ...post, totalComentarios: comContagem[i].totalComentarios }));
+}
+
+/** Lista as postagens (mais recentes primeiro) com curtidas e comentários já contados. */
 export async function listarPostagensComCurtidas(usuarioId: number | null) {
   const posts = await listarPostagens();
   const ordenados = [...(posts ?? [])].sort((a, b) => b.idPostagem - a.idPostagem);
-  return comCurtidas(ordenados, usuarioId);
+  return detalharPostagens(ordenados, usuarioId);
 }
 
 export function buscarPostagem(id: number) {
@@ -34,7 +59,7 @@ export function buscarPostagem(id: number) {
 
 export async function buscarPostagemComCurtidas(id: number, usuarioId: number | null) {
   const post = await buscarPostagem(id);
-  const [resultado] = await comCurtidas([post], usuarioId);
+  const [resultado] = await detalharPostagens([post], usuarioId);
   return resultado;
 }
 

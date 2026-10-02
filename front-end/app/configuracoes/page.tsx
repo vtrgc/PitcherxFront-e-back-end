@@ -12,11 +12,15 @@ import { redefinirSenha, excluirUsuario } from "../services/usuario.service";
 import { ApiError, decodificarToken, getToken, mensagemErro } from "../lib/api";
 import { useNotificacoes } from "../context/NotificacoesContext";
 import { SENHA_MINIMA } from "../lib/validacao";
+import { useDadosPerfil } from "../hook/useDadosPerfil";
+import CartaoVerificacao from "../components/perfil/CartaoVerificacao";
 
 export default function Configuracoes() {
   const { usuario, logout, isAdmin } = useAuth();
   const { notificar } = useFeedback();
   const { naoLidas } = useNotificacoes();
+  // Perfil profissional: traz o CPF/CNPJ usado na verificação de identidade.
+  const dadosPerfil = useDadosPerfil(isAdmin ? null : usuario?.idUsuario);
   // Validade da sessão: o JWT do backend expira em 30 dias (campo `exp`).
   const [expiraEm] = useState(() => {
     const exp = decodificarToken(getToken())?.exp;
@@ -151,6 +155,19 @@ export default function Configuracoes() {
             servidor for corrigido.
           </p>
         </div>
+
+        {!isAdmin && usuario && (
+          <div id="verificacao" className="py-4 pl-0 sm:pl-12">
+            <CartaoVerificacao
+              semMoldura
+              email={usuario.emailUsuario}
+              ativo={usuario.isActive}
+              identificador={dadosPerfil.perfil?.identificador ?? null}
+              carregando={dadosPerfil.carregando}
+              erroPerfil={!!dadosPerfil.erro}
+            />
+          </div>
+        )}
 
         <Link href="/notificacoes" className="flex items-center justify-between py-4 text-[14.5px] font-medium text-ink-900 hover:text-brand-700">
           <span className="flex items-center gap-3">

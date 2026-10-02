@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, Briefcase } from "lucide-react";
+import { Users, Briefcase, Building2 } from "lucide-react";
 
 import PageShell from "../components/PageShell";
 import SearchBar from "../components/SearchBar";
@@ -13,9 +13,11 @@ import Avatar from "../components/ui/Avatar";
 import { cls } from "../components/ui/estilos";
 import { useAuth } from "../context/AuthContext";
 import { useUsuario } from "../hook/useUsuario";
-import { useMinhasConexoes } from "../hook/useConexao";
+import { useContadoresConexao, useMinhasConexoes } from "../hook/useConexao";
+import { Empresa, listarEmpresas } from "../services/empresa.service";
 import BotaoConexao from "../components/conexao/BotaoConexao";
 import ImagemRemota from "../components/ImagemRemota";
+import ResumoFinanceiroMini from "../components/projeto/ResumoFinanceiroMini";
 import { mensagemErro } from "../lib/api";
 import { PerfilUsuario } from "../types/PerfilUsuario";
 import { Projeto } from "../types/Projeto";
@@ -24,7 +26,7 @@ import { listarPerfisUsuario } from "../services/perfilUsuario.service";
 import { listarProjetos } from "../services/projeto.service";
 import { listarTiposProjeto } from "../services/tipoProjeto.service";
 
-type Aba = "pessoas" | "projetos";
+type Aba = "pessoas" | "empresas" | "projetos";
 const POR_PAGINA = 12;
 
 type Conexoes = ReturnType<typeof useMinhasConexoes>;
@@ -67,6 +69,44 @@ function CartaoPessoa({ perfil, conexoes, eu }: { perfil: PerfilUsuario; conexoe
   );
 }
 
+/** Cartão de empresa: dados reais da conta/perfil, seguidores (GET /conexao/contar-seguidores) e seguir. */
+function CartaoEmpresa({ empresa, conexoes, eu }: { empresa: Empresa; conexoes: Conexoes | null; eu: number | null }) {
+  const contadores = useContadoresConexao(empresa.idUsuario);
+  const pessoa = { id: empresa.idUsuario, nome: empresa.nome };
+  return (
+    <div className={`${cls.card} flex flex-col p-4`}>
+      <Link href={`/perfil/${empresa.idUsuario}`} className="group flex items-center gap-3">
+        <Avatar url={empresa.urlImagem} nome={empresa.nome} tamanho={52} />
+        <span className="min-w-0">
+          <span className="block truncate font-display text-[15px] font-bold text-ink-900 group-hover:text-brand-700">{empresa.nome}</span>
+          <span className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-brand-700">
+            <Building2 size={12} aria-hidden="true" /> Empresa
+          </span>
+        </span>
+      </Link>
+      {empresa.perfil?.especialidade && <p className="mt-3 truncate text-[13px] text-ink-600">{empresa.perfil.especialidade.nomeEspecialidade}</p>}
+      <p className="mt-1 text-[12.5px] text-ink-500">
+        {contadores.seguidores === null ? (contadores.erro ? "Seguidores indisponíveis" : "Carregando seguidores...") : `${contadores.seguidores.toLocaleString("pt-BR")} seguidor${contadores.seguidores === 1 ? "" : "es"}`}
+      </p>
+      <div className="mt-auto pt-3">
+        {conexoes && empresa.idUsuario !== eu && !conexoes.carregando && !conexoes.erro ? (
+          <BotaoConexao
+            compacto
+            relacao={conexoes.relacaoCom(empresa.idUsuario)}
+            ocupado={conexoes.ocupado(empresa.idUsuario)}
+            mostrarResposta={false}
+            onSeguir={() => conexoes.seguir(pessoa)}
+            onDeixarDeSeguir={() => conexoes.deixarDeSeguir(pessoa)}
+            onCancelar={() => conexoes.cancelarSolicitacao(pessoa)}
+          />
+        ) : empresa.idUsuario === eu ? (
+          <span className="text-[12.5px] font-semibold text-ink-400">Sua empresa</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function Explorar() {
   const { isAuthenticated, isAdmin, usuario } = useAuth();
   // Administradores não participam da rede social (sem seguir), só visualizam.
@@ -79,6 +119,7 @@ export default function Explorar() {
   const [limite, setLimite] = useState(POR_PAGINA);
 
   const [perfis, setPerfis] = useState<PerfilUsuario[]>([]);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [tipos, setTipos] = useState<TipoProjeto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,10 +129,11 @@ export default function Explorar() {
     setLoading(true);
     setErros([]);
     // Uma fonte com erro não impede a outra de aparecer.
-    const [rPerfis, rProjetos, rTipos] = await Promise.allSettled([
+    const [rPerfis, rProjetos, rTipos, rEmpresas] = await Promise.allSettled([
       listarPerfisUsuario(),
       listarProjetos(),
       listarTiposProjeto(),
+      listarEmpresas({ admin: isAdmin }),
     ]);
     const novosErros: string[] = [];
     if (rPerfis.status === "fulfilled") setPerfis(rPerfis.value ?? []);
@@ -99,9 +141,11 @@ export default function Explorar() {
     if (rProjetos.status === "fulfilled") setProjetos([...(rProjetos.value ?? [])].sort((a, b) => b.idProjeto - a.idProjeto));
     else novosErros.push(`Projetos: ${mensagemErro(rProjetos.reason)}`);
     if (rTipos.status === "fulfilled") setTipos(rTipos.value ?? []);
+    if (rEmpresas.status === "fulfilled") setEmpresas(rEmpresas.value);
+    else novosErros.push(`Empresas: ${mensagemErro(rEmpresas.reason)}`);
     setErros(novosErros);
     setLoading(false);
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (isAuthenticated) carregar();
@@ -141,7 +185,16 @@ export default function Explorar() {
     [projetos, termo, filtroTipo]
   );
 
-  const totalFiltrado = aba === "pessoas" ? perfisFiltrados.length : projetosFiltrados.length;
+  const empresasFiltradas = useMemo(
+    () =>
+      empresas.filter(
+        (e) =>
+          !termo || `${e.nome} ${e.email} ${e.perfil?.especialidade?.nomeEspecialidade ?? ""}`.toLowerCase().includes(termo)
+      ),
+    [empresas, termo]
+  );
+
+  const totalFiltrado = aba === "pessoas" ? perfisFiltrados.length : aba === "empresas" ? empresasFiltradas.length : projetosFiltrados.length;
 
   return (
     <PageShell>
@@ -155,14 +208,15 @@ export default function Explorar() {
         onChange={setBusca}
         onRefresh={carregar}
         loading={loading}
-        placeholder={aba === "pessoas" ? "Pesquisar pessoas..." : "Pesquisar projetos..."}
+        placeholder={aba === "pessoas" ? "Pesquisar pessoas..." : aba === "empresas" ? "Pesquisar empresas..." : "Pesquisar projetos..."}
       />
 
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-ink-100">
-        <div role="tablist" aria-label="O que explorar" className="flex items-center gap-6">
+        <div role="tablist" aria-label="O que explorar" className="flex max-w-full items-center gap-4 overflow-x-auto sm:gap-6">
           {(
             [
               { id: "pessoas", rotulo: "Pessoas", icone: Users, total: perfis.length },
+              { id: "empresas", rotulo: "Empresas", icone: Building2, total: empresas.length },
               { id: "projetos", rotulo: "Projetos", icone: Briefcase, total: projetos.length },
             ] as const
           ).map(({ id, rotulo, icone: Icone, total }) => (
@@ -172,19 +226,19 @@ export default function Explorar() {
               role="tab"
               aria-selected={aba === id}
               onClick={() => setAba(id)}
-              className={`relative flex items-center gap-1.5 pb-3 text-[14px] font-bold transition-colors ${
+              className={`relative flex shrink-0 items-center gap-1.5 pb-3 text-[14px] font-bold transition-colors ${
                 aba === id ? "text-ink-900" : "text-ink-400 hover:text-ink-600"
               }`}
             >
               <Icone size={15} aria-hidden="true" /> {rotulo}
               <span className="text-ink-400">({total})</span>
-              {aba === id && <span className="absolute -bottom-px left-0 right-0 h-[2px] rounded-full bg-brand-600" />}
+              {aba === id && <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-brand-600" />}
             </button>
           ))}
         </div>
 
         <div className="pb-2">
-          {aba === "pessoas" ? (
+          {aba === "empresas" ? null : aba === "pessoas" ? (
             <select
               aria-label="Filtrar por especialidade"
               value={filtroEspecialidade}
@@ -224,6 +278,26 @@ export default function Explorar() {
 
       {loading ? (
         <CardGridSkeleton count={6} />
+      ) : aba === "empresas" ? (
+        empresasFiltradas.length === 0 ? (
+          <div className={cls.card}>
+            <EmptyState
+              icon={Building2}
+              title={busca ? "Nenhuma empresa encontrada" : "Nenhuma empresa cadastrada ainda"}
+              description={
+                busca
+                  ? "Tente outro termo."
+                  : "Empresas são contas com o perfil de empresa (atribuído pela administração) ou perfis cadastrados com CNPJ."
+              }
+            />
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {empresasFiltradas.slice(0, limite).map((empresa) => (
+              <CartaoEmpresa key={empresa.idUsuario} empresa={empresa} conexoes={isAdmin ? null : conexoes} eu={usuario?.idUsuario ?? null} />
+            ))}
+          </div>
+        )
       ) : aba === "pessoas" ? (
         perfisFiltrados.length === 0 ? (
           <div className={cls.card}>
@@ -273,6 +347,7 @@ export default function Explorar() {
                 <p className="text-[0.75rem] text-ink-400 mt-2">
                   {tipoMap.get(projeto.tipoProjetoId) ?? "Projeto"} · {projeto.dataInicioProjeto} — {projeto.dataFimProjeto}
                 </p>
+                <ResumoFinanceiroMini ficha={projeto.ficha} className="mt-2 max-w-md" />
               </div>
               <span className={`${projeto.active ? cls.chipAtivo : cls.chipInativo} shrink-0`}>
                 {projeto.active ? "Ativo" : "Inativo"}

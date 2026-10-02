@@ -20,7 +20,7 @@ import { Contrato, ContratoRequest } from "../types/Contrato";
 import { Projeto } from "../types/Projeto";
 import { listarContratos, criarContrato, atualizarContrato, excluirContrato } from "../services/contrato.service";
 import { listarProjetos } from "../services/projeto.service";
-import { listarIdsProjetosCriados } from "../services/projetoUsuario.service";
+import { listarIdsProjetosCriados, listarIdsProjetosParte } from "../services/projetoUsuario.service";
 import { listarTermos } from "../services/termo.service";
 
 export default function ContratosPage() {
@@ -32,9 +32,13 @@ export default function ContratosPage() {
 }
 
 /**
- * Contratos. O backend permite criar/editar/excluir a ADMIN e USUARIO (a regra cita
- * "EMPRESARIO", role que não existe — contas só EMPRESA recebem 403). Na interface,
- * usuários gerenciam apenas contratos de projetos em que são CRIADOR; o admin, todos.
+ * Contratos — registro formal de autoria dos projetos (base do verificador antiplágio).
+ *
+ * O `GET /contrato` do backend devolve TODOS os contratos para qualquer conta autenticada.
+ * A interface restringe a exibição: o administrador vê todos; os demais usuários veem apenas
+ * contratos de projetos em que são PARTE (criador, sócio ou investidor — ver
+ * `VINCULOS_PARTE_CONTRATO`). Se não for possível confirmar os vínculos, nada é exibido.
+ * Criar/editar/excluir continua restrito ao CRIADOR do projeto (ou ao admin).
  */
 function ContratosPageContent() {
   const { isAuthenticated, isAdmin, usuario } = useAuth();
@@ -46,6 +50,8 @@ function ContratosPageContent() {
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [meusProjetos, setMeusProjetos] = useState<Set<number>>(new Set());
+  // Projetos em que sou parte (criador, sócio ou investidor): define o que posso VER.
+  const [projetosParte, setProjetosParte] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState("");
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -57,14 +63,19 @@ function ContratosPageContent() {
     setLoading(true);
     setErroCarregamento("");
     try {
-      const [listaContratos, listaProjetos, meus] = await Promise.all([
+      // Sem a lista de vínculos não há como saber o que o usuário pode ver: a falha
+      // interrompe a carga (nada de "mostrar tudo" por engano).
+      const [listaContratos, listaProjetos, meus, parte] = await Promise.all([
         listarContratos(),
         listarProjetos().catch(() => [] as Projeto[]),
-        isAdmin ? Promise.resolve(new Set<number>()) : listarIdsProjetosCriados(idUsuario).catch(() => new Set<number>()),
+        isAdmin ? Promise.resolve(new Set<number>()) : listarIdsProjetosCriados(idUsuario),
+        isAdmin ? Promise.resolve(new Set<number>()) : listarIdsProjetosParte(idUsuario),
       ]);
-      setContratos([...(listaContratos ?? [])].sort((a, b) => b.idContrato - a.idContrato));
+      const visiveisParaMim = (listaContratos ?? []).filter((c) => isAdmin || parte.has(c.projetoId));
+      setContratos(visiveisParaMim.sort((a, b) => b.idContrato - a.idContrato));
       setProjetos(listaProjetos ?? []);
       setMeusProjetos(meus);
+      setProjetosParte(parte);
     } catch (error) {
       setErroCarregamento(
         error instanceof ApiError && error.status === 403
@@ -81,14 +92,17 @@ function ContratosPageContent() {
   }, [isAuthenticated, carregar]);
 
   const podeGerenciar = useCallback(
-    (projetoId: number) => isAdmin || meusProjetos.has(projetoId),
-    [isAdmin, meusProjetos]
+    (projetoId: number) => isAdmin || (!!usuario?.roles?.includes("USUARIO") && meusProjetos.has(projetoId)),
+    [isAdmin, meusProjetos, usuario?.roles]
   );
   const projetosDisponiveis = useMemo(
     () => (isAdmin ? projetos : projetos.filter((p) => meusProjetos.has(p.idProjeto))),
     [isAdmin, projetos, meusProjetos]
   );
-  const podeCriar = isAdmin || projetosDisponiveis.length > 0;
+  // POST/PUT/DELETE /contrato aceitam ADMIN e USUARIO (o backend cita "EMPRESARIO", role
+  // inexistente): uma conta somente EMPRESA receberia 403, então não oferecemos a ação.
+  const contaPodeGerenciar = isAdmin || !!usuario?.roles?.includes("USUARIO");
+  const podeCriar = contaPodeGerenciar && (isAdmin || projetosDisponiveis.length > 0);
 
   // Chegando de "Novo contrato" na página do projeto: abre o formulário uma única vez.
   const abriuPeloParametro = useRef(false);
@@ -163,7 +177,9 @@ function ContratosPageContent() {
           <p className={cls.eyebrow}>Formalize</p>
           <h1 className={cls.h1}>Contratos</h1>
           <p className={`${cls.texto} mt-1.5 max-w-md`}>
-            {isAdmin ? "Todos os contratos da plataforma." : "Formalize contratos a partir dos projetos que você criou."}
+            {isAdmin
+              ? "Todos os contratos da plataforma."
+              : "Registro de autoria dos seus projetos (verificador antiplágio). Você vê apenas contratos de projetos em que é criador, sócio ou investidor."}
           </p>
         </div>
 
@@ -220,7 +236,9 @@ function ContratosPageContent() {
                 ? "Tente outro termo."
                 : isAdmin
                 ? "Ainda não há contratos na plataforma."
-                : "Crie um projeto e, a partir dele, formalize um contrato."
+                : projetosParte.size === 0
+                ? "Você ainda não é parte de nenhum projeto. Crie um projeto e, a partir dele, formalize um contrato."
+                : "Nenhum contrato registrado nos projetos dos quais você participa."
             }
           />
         </div>

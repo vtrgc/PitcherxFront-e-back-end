@@ -3,7 +3,30 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Pencil, Trash2, Loader2, Calendar, FileSignature, Plus, Users, X, Heart, Images, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  Pencil,
+  Trash2,
+  Loader2,
+  Calendar,
+  FileSignature,
+  Plus,
+  Users,
+  X,
+  Heart,
+  Images,
+  Upload,
+  Share2,
+  Flag,
+  Building2,
+  Info,
+  Lock,
+  Clock,
+  Tag,
+  UserRound,
+  Activity,
+  type LucideIcon,
+} from "lucide-react";
 
 import PageShell from "../../components/PageShell";
 import EmptyState from "../../components/EmptyState";
@@ -12,6 +35,14 @@ import ImagemRemota from "../../components/ImagemRemota";
 import GaleriaImagens from "../../components/GaleriaImagens";
 import SeletorImagens from "../../components/SeletorImagens";
 import { imagensDaGaleria } from "../../lib/galeria";
+import PainelFinanceiro from "../../components/projeto/PainelFinanceiro";
+import PainelVotos from "../../components/projeto/PainelVotos";
+import ModalDenuncia from "../../components/denuncia/ModalDenuncia";
+import ConteudoOcultado from "../../components/denuncia/ConteudoOcultado";
+import Avatar from "../../components/ui/Avatar";
+import { useDenuncia } from "../../hook/useDenuncia";
+import { ROTULO_SITUACAO, formatarDias, linhaDoTempo } from "../../lib/projeto";
+import { Empresa, listarEmpresas } from "../../services/empresa.service";
 import Alerta from "../../components/ui/Alerta";
 import { cls } from "../../components/ui/estilos";
 import { useFeedback } from "../../components/ui/FeedbackProvider";
@@ -28,28 +59,27 @@ import { buscarProjeto, atualizarProjeto, excluirProjeto, removerImagensProjeto,
 import { listarTiposProjeto } from "../../services/tipoProjeto.service";
 import { listarContratos } from "../../services/contrato.service";
 import { listarPerfisUsuario } from "../../services/perfilUsuario.service";
-import { listarPorProjeto, vincularUsuario, removerVinculo } from "../../services/projetoUsuario.service";
+import { listarPorProjeto, vincularUsuario, removerVinculo, ehParteDoContrato } from "../../services/projetoUsuario.service";
 
-function BotaoCurtirProjeto({ idProjeto }: { idProjeto: number }) {
-  const curtida = useCurtida("PROJETO", idProjeto);
-  const { carregar } = curtida;
-  useEffect(() => {
-    carregar();
-  }, [carregar]);
+/** Botão "Votar" (curtida do projeto) com a contagem real de votos. */
+function BotaoVotarProjeto({ curtida, desabilitado }: { curtida: ReturnType<typeof useCurtida>; desabilitado: boolean }) {
   return (
     <button
       type="button"
       onClick={curtida.alternarCurtida}
-      disabled={curtida.enviando || curtida.carregando}
+      disabled={desabilitado || curtida.enviando || curtida.carregando}
       aria-pressed={curtida.curtido}
-      aria-label={`${curtida.curtido ? "Descurtir" : "Curtir"} projeto (${curtida.totalCurtidas})`}
+      aria-label={`${curtida.curtido ? "Remover voto" : "Votar"} no projeto (${curtida.totalCurtidas} voto${curtida.totalCurtidas === 1 ? "" : "s"})`}
       className="inline-flex items-center gap-1.5 rounded-[0.625rem] border border-white/20 bg-white/10 px-3 py-[0.55rem] text-sm font-semibold text-white hover:bg-white/20 disabled:opacity-60"
     >
       <Heart size={15} className={curtida.curtido ? "fill-accent-400 text-accent-400" : ""} aria-hidden="true" />
-      {curtida.totalCurtidas}
+      {curtida.curtido ? "Votado" : "Votar"} · {curtida.totalCurtidas.toLocaleString("pt-BR")}
     </button>
   );
 }
+
+const BOTAO_HERO =
+  "inline-flex items-center gap-1.5 rounded-[0.625rem] border border-white/20 bg-white/10 px-3 py-[0.55rem] text-sm font-semibold text-white hover:bg-white/20 disabled:opacity-60";
 
 export default function ProjetoDetalhePage() {
   const params = useParams();
@@ -77,6 +107,15 @@ export default function ProjetoDetalhePage() {
   const [novoMembroTipoVinculoId, setNovoMembroTipoVinculoId] = useState<number | "">("");
   const [salvandoMembro, setSalvandoMembro] = useState(false);
   const [erroMembro, setErroMembro] = useState("");
+
+  // Empresas cadastradas: identificam "empresas relacionadas" e o voto das empresas.
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [carregandoEmpresas, setCarregandoEmpresas] = useState(true);
+  const [erroEmpresas, setErroEmpresas] = useState("");
+
+  const curtida = useCurtida("PROJETO", id);
+  const { carregar: carregarCurtida } = curtida;
+  const denuncia = useDenuncia("PROJETO", id);
 
   const [gerenciandoImagens, setGerenciandoImagens] = useState(false);
   const [novasImagens, setNovasImagens] = useState<File[]>([]);
@@ -118,9 +157,43 @@ export default function ProjetoDetalhePage() {
     }
   }, [id]);
 
+  const carregarEmpresas = useCallback(async () => {
+    setCarregandoEmpresas(true);
+    setErroEmpresas("");
+    try {
+      setEmpresas(await listarEmpresas({ admin: isAdmin }));
+    } catch (error) {
+      setErroEmpresas(mensagemErro(error, "Não foi possível carregar as empresas para apurar os votos."));
+    } finally {
+      setCarregandoEmpresas(false);
+    }
+  }, [isAdmin]);
+
   useEffect(() => {
     if (isAuthenticated) carregar();
   }, [isAuthenticated, carregar]);
+
+  useEffect(() => {
+    if (isAuthenticated && Number.isInteger(id) && id > 0) {
+      carregarCurtida();
+      carregarEmpresas();
+    }
+  }, [isAuthenticated, id, carregarCurtida, carregarEmpresas]);
+
+  async function compartilhar() {
+    if (!projeto) return;
+    const url = `${window.location.origin}/projetos/${projeto.idProjeto}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: projeto.nomeProjeto, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      notificar("Link do projeto copiado.", "sucesso");
+    } catch (error) {
+      if ((error as Error)?.name !== "AbortError") notificar("Não foi possível copiar o link. Copie o endereço da barra do navegador.", "erro");
+    }
+  }
 
   const tipoAtual = useMemo(() => tipos.find((t) => t.idTipoProjeto === projeto?.tipoProjetoId), [tipos, projeto]);
 
@@ -136,6 +209,10 @@ export default function ProjetoDetalhePage() {
   // PUT/DELETE /projeto/{id}/imagens: qualquer usuário vinculado ao projeto ou ADMIN.
   const podeGerenciarImagens = isAdmin || (!!usuario && !erroMembros && membros.some((m) => m.usuarioId === usuario.idUsuario));
   const imagens = imagensDaGaleria(projeto?.imagens, projeto?.urlImagemProjeto);
+  // Contratos = registro de autoria (antiplágio): só as partes do projeto e o admin os veem.
+  const podeVerContratos = isAdmin || (!erroMembros && ehParteDoContrato(membros, usuario?.idUsuario));
+  const naEquipe = !!usuario && membros.some((m) => m.usuarioId === usuario.idUsuario);
+  const podeDenunciar = denuncia.podeDenunciar && !isAdmin && !naEquipe && !erroMembros;
 
   async function salvarImagens() {
     if (!projeto || novasImagens.length === 0) return;
@@ -307,6 +384,25 @@ export default function ProjetoDetalhePage() {
   }
 
   const idsNaEquipe = new Set(membros.map((m) => m.usuarioId));
+  const tempo = linhaDoTempo(projeto);
+  const empresasPorId = new Map(empresas.map((e) => [e.idUsuario, e]));
+  // Autor(es): vínculo CRIADOR. Empresas relacionadas: membros da equipe que são empresas.
+  const autores = criadores.filter((m, i, l) => l.findIndex((x) => x.usuarioId === m.usuarioId) === i);
+  const empresasRelacionadas = [...new Set(membros.map((m) => m.usuarioId))]
+    .map((uid) => ({ empresa: empresasPorId.get(uid), vinculos: membros.filter((m) => m.usuarioId === uid).map((m) => rotuloVinculo(m.nomeTipoVinculo)) }))
+    .filter((x): x is { empresa: Empresa; vinculos: string[] } => !!x.empresa);
+  const contagemVinculo = (tipo: number) => new Set(membros.filter((m) => m.tipoVinculoId === tipo).map((m) => m.usuarioId)).size;
+
+  if (podeDenunciar && denuncia.denunciado) {
+    return (
+      <PageShell>
+        <Link href={voltar.href} className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-brand-700 hover:underline">
+          <ArrowLeft size={15} aria-hidden="true" /> {voltar.rotulo}
+        </Link>
+        <ConteudoOcultado nome="este projeto" onDesfazer={denuncia.desfazer} className="mt-4" />
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell>
@@ -325,7 +421,7 @@ export default function ProjetoDetalhePage() {
           <div className="min-w-0">
             <div className="flex flex-wrap gap-2">
               <span className={`${cls.chip} !bg-accent-500 !text-white !border-transparent`}>{tipoAtual?.nomeTipoProjeto || "Projeto"}</span>
-              <span className={projeto.active ? cls.chipAtivo : cls.chipInativo}>{projeto.active ? "Ativo" : "Inativo"}</span>
+              <span className={tempo.situacao === "em_andamento" ? cls.chipAtivo : cls.chipInativo}>{ROTULO_SITUACAO[tempo.situacao]}</span>
             </div>
             <h1 className="font-display mt-3 text-[1.5rem] sm:text-[1.9rem] font-extrabold leading-tight tracking-tight text-white drop-shadow-lg break-words">
               {projeto.nomeProjeto}
@@ -333,7 +429,16 @@ export default function ProjetoDetalhePage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <BotaoCurtirProjeto idProjeto={projeto.idProjeto} />
+            <BotaoVotarProjeto curtida={curtida} desabilitado={!usuario} />
+            <button type="button" onClick={compartilhar} className={BOTAO_HERO} aria-label="Compartilhar projeto">
+              <Share2 size={15} aria-hidden="true" />
+              <span className="hidden sm:inline">Compartilhar</span>
+            </button>
+            {podeDenunciar && !denuncia.denunciado && (
+              <button type="button" onClick={denuncia.abrir} className={BOTAO_HERO} aria-label="Denunciar projeto" title="Denunciar projeto">
+                <Flag size={15} aria-hidden="true" />
+              </button>
+            )}
             {podeGerenciar && !editando && (
               <button
                 type="button"
@@ -359,35 +464,139 @@ export default function ProjetoDetalhePage() {
         </div>
       </div>
 
-      <div className="mt-8">
-        {!editando ? (
-          <>
-            <p className={`${cls.texto} max-w-2xl whitespace-pre-line break-words`}>{projeto.descricaoProjeto}</p>
-            <div className="text-[0.8125rem] text-ink-500 mt-5 flex items-center gap-1.5">
-              <Calendar size={14} aria-hidden="true" />
-              {projeto.dataInicioProjeto} até {projeto.dataFimProjeto}
-            </div>
-            {semCriadorRegistrado && !isAdmin && (
-              <p className="mt-3 text-[12.5px] text-ink-400">
-                Este projeto não tem criador registrado; por isso a edição está liberada para usuários autenticados, como no servidor.
-              </p>
-            )}
-          </>
-        ) : (
-          <section aria-labelledby="titulo-editar-projeto" className="max-w-2xl">
-            <h2 id="titulo-editar-projeto" className={cls.eyebrow}>
-              Editar projeto
-            </h2>
-            <FormProjeto
-              projeto={projeto}
-              tipos={tipos}
-              rotuloEnviar="Salvar alterações"
-              onEnviar={salvar}
-              onCancelar={() => setEditando(false)}
+      <ModalDenuncia tipo="PROJETO" conteudoId={projeto.idProjeto} aberto={denuncia.modalAberto} onFechar={denuncia.fechar} />
+
+      {editando ? (
+        <section aria-labelledby="titulo-editar-projeto" className="mt-8 max-w-2xl">
+          <h2 id="titulo-editar-projeto" className={cls.eyebrow}>
+            Editar projeto
+          </h2>
+          <FormProjeto
+            projeto={projeto}
+            tipos={tipos}
+            rotuloEnviar="Salvar alterações"
+            onEnviar={salvar}
+            onCancelar={() => setEditando(false)}
+          />
+        </section>
+      ) : (
+        <div className="mt-8 space-y-6">
+          <div className="min-w-0 space-y-6">
+            <section className={`${cls.card} p-5 sm:p-6`} aria-labelledby="titulo-sobre-projeto">
+              <h2 id="titulo-sobre-projeto" className={cls.eyebrow}>
+                <Info size={14} aria-hidden="true" /> Sobre o projeto
+              </h2>
+              <p className={`${cls.texto} mt-3 whitespace-pre-line break-words`}>{projeto.descricaoProjeto || "Sem descrição."}</p>
+              {semCriadorRegistrado && !isAdmin && (
+                <p className="mt-3 text-[12.5px] text-ink-400">
+                  Este projeto não tem criador registrado; por isso a edição está liberada para usuários autenticados, como no servidor.
+                </p>
+              )}
+            </section>
+
+            <aside className="grid gap-6 md:grid-cols-2" aria-label="Informações do projeto">
+            <section className={`${cls.card} p-5`} aria-labelledby="titulo-info-projeto">
+              <h2 id="titulo-info-projeto" className="font-display text-[16px] font-bold text-ink-900">
+                Informações principais
+              </h2>
+              <dl className="mt-4 space-y-3.5 text-[14px]">
+                <InfoLinha icone={Tag} rotulo="Categoria">
+                  {tipoAtual ? (
+                    <Link href="/tipos-projeto" className="font-semibold text-brand-700 hover:underline">
+                      {tipoAtual.nomeTipoProjeto}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </InfoLinha>
+                <InfoLinha icone={Activity} rotulo="Status">
+                  {ROTULO_SITUACAO[tempo.situacao]}
+                  {tempo.diasRestantes !== null && <span className="text-ink-500"> · faltam {formatarDias(tempo.diasRestantes)}</span>}
+                  {tempo.diasParaComecar !== null && <span className="text-ink-500"> · começa em {formatarDias(tempo.diasParaComecar)}</span>}
+                </InfoLinha>
+                <InfoLinha icone={Calendar} rotulo="Período">
+                  {projeto.dataInicioProjeto} até {projeto.dataFimProjeto}
+                </InfoLinha>
+                <InfoLinha icone={Clock} rotulo="Duração">
+                  {formatarDias(tempo.duracaoDias)}
+                </InfoLinha>
+                {tempo.prazoDecorrido !== null && tempo.situacao !== "inativo" && (
+                  <div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-100" aria-hidden="true">
+                      <div className="h-full rounded-full bg-brand-500" style={{ width: `${tempo.prazoDecorrido}%` }} />
+                    </div>
+                    <p className="mt-1 text-[12px] text-ink-500">{Math.round(tempo.prazoDecorrido)}% do prazo decorrido</p>
+                  </div>
+                )}
+                <InfoLinha icone={Users} rotulo="Equipe">
+                  {erroMembros ? (
+                    "Indisponível"
+                  ) : (
+                    <>
+                      {idsNaEquipe.size} pessoa{idsNaEquipe.size === 1 ? "" : "s"}
+                      <span className="block text-[12.5px] text-ink-500">
+                        {contagemVinculo(TIPO_VINCULO_ID.SOCIO)} sócio(s) · {contagemVinculo(TIPO_VINCULO_ID.INVESTIDOR)} investidor(es)
+                      </span>
+                    </>
+                  )}
+                </InfoLinha>
+                <InfoLinha icone={Images} rotulo="Imagens">
+                  {imagens.length}
+                </InfoLinha>
+              </dl>
+            </section>
+
+            <section className={`${cls.card} p-5`} aria-labelledby="titulo-autor">
+              <h2 id="titulo-autor" className="font-display text-[16px] font-bold text-ink-900">
+                Autor{autores.length > 1 ? "es" : ""}
+              </h2>
+              {erroMembros ? (
+                <p className="mt-3 text-[13px] text-ink-500">Não foi possível carregar a equipe.</p>
+              ) : autores.length === 0 ? (
+                <p className="mt-3 text-[13px] text-ink-500">Nenhum criador registrado.</p>
+              ) : (
+                <ul className="mt-3 space-y-2.5">
+                  {autores.map((a) => (
+                    <PessoaDoProjeto key={a.usuarioId} id={a.usuarioId} nome={a.nomeUsuario} detalhe={`Criador desde ${formatarData(a.dataVinculo)}`} empresa={empresasPorId.get(a.usuarioId)} />
+                  ))}
+                </ul>
+              )}
+
+              <h3 className="mt-5 flex items-center gap-1.5 border-t border-ink-100 pt-4 text-[13px] font-semibold text-ink-800">
+                <Building2 size={14} aria-hidden="true" /> Empresas relacionadas
+              </h3>
+              {carregandoEmpresas ? (
+                <div className={`${cls.skeleton} mt-3 h-8 w-full rounded-lg`} aria-label="Carregando empresas" />
+              ) : erroEmpresas ? (
+                <p className="mt-2 text-[12.5px] text-ink-500">Indisponível no momento.</p>
+              ) : empresasRelacionadas.length === 0 ? (
+                <p className="mt-2 text-[12.5px] text-ink-500">Nenhuma empresa na equipe deste projeto.</p>
+              ) : (
+                <ul className="mt-3 space-y-2.5">
+                  {empresasRelacionadas.map(({ empresa, vinculos }) => (
+                    <PessoaDoProjeto key={empresa.idUsuario} id={empresa.idUsuario} nome={empresa.nome} detalhe={vinculos.join(", ")} empresa={empresa} url={empresa.urlImagem} />
+                  ))}
+                </ul>
+              )}
+            </section>
+          </aside>
+
+            <PainelFinanceiro ficha={projeto.ficha} podeEditar={podeGerenciar} onEditar={() => setEditando(true)} />
+
+            <PainelVotos
+              projetoId={projeto.idProjeto}
+              totalVotos={curtida.totalCurtidas}
+              carregandoTotal={curtida.carregando}
+              empresas={empresas}
+              carregandoEmpresas={carregandoEmpresas}
+              erroEmpresas={erroEmpresas}
+              versao={String(curtida.curtido)}
+              onTentarNovamente={carregarEmpresas}
             />
-          </section>
-        )}
-      </div>
+          </div>
+
+        </div>
+      )}
 
       {(imagens.length > 0 || podeGerenciarImagens) && (
         <section className="mt-10 border-t border-ink-100 pt-8" aria-labelledby="titulo-galeria">
@@ -454,7 +663,7 @@ export default function ProjetoDetalhePage() {
             <FileSignature size={14} aria-hidden="true" />
             Contratos deste projeto
           </h2>
-          {podeCriarContrato && (
+          {podeCriarContrato && podeVerContratos && (
             <Link href={`/contratos?projetoId=${projeto.idProjeto}`} className={`${cls.btnSecundario} !text-[13px]`}>
               <Plus size={15} aria-hidden="true" />
               Novo contrato
@@ -462,7 +671,13 @@ export default function ProjetoDetalhePage() {
           )}
         </div>
 
-        {erroContratos ? (
+        {!podeVerContratos ? (
+          <p className="mt-4 flex items-start gap-2 rounded-xl bg-ink-25 px-4 py-3 text-[13px] text-ink-500">
+            <Lock size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+            Os contratos registram a autoria do projeto (verificador antiplágio) e ficam visíveis apenas para o criador, os sócios,
+            os investidores e a administração.
+          </p>
+        ) : erroContratos ? (
           <Alerta className="mt-4" onTentarNovamente={carregar}>
             Não foi possível carregar os contratos deste projeto.
           </Alerta>
@@ -628,5 +843,46 @@ export default function ProjetoDetalhePage() {
         )}
       </section>
     </PageShell>
+  );
+}
+
+function InfoLinha({ icone: Icone, rotulo, children }: { icone: LucideIcon; rotulo: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <Icone size={16} className="mt-0.5 shrink-0 text-ink-400" aria-hidden="true" />
+      <div className="min-w-0">
+        <dt className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-ink-400">{rotulo}</dt>
+        <dd className="mt-0.5 break-words text-ink-800">{children}</dd>
+      </div>
+    </div>
+  );
+}
+
+function PessoaDoProjeto({
+  id,
+  nome,
+  detalhe,
+  empresa,
+  url,
+}: {
+  id: number;
+  nome: string;
+  detalhe?: string;
+  empresa?: Empresa;
+  url?: string | null;
+}) {
+  return (
+    <li>
+      <Link href={`/perfil/${id}`} className="group flex items-center gap-2.5">
+        <Avatar url={url ?? empresa?.urlImagem} nome={nome} tamanho={36} />
+        <span className="min-w-0">
+          <span className="flex items-center gap-1.5 truncate text-[14px] font-semibold text-ink-900 group-hover:underline">
+            {nome}
+            {empresa ? <Building2 size={13} className="shrink-0 text-brand-600" aria-label="Empresa" /> : <UserRound size={13} className="shrink-0 text-ink-400" aria-hidden="true" />}
+          </span>
+          {detalhe && <span className="block truncate text-[12px] text-ink-500">{detalhe}</span>}
+        </span>
+      </Link>
+    </li>
   );
 }

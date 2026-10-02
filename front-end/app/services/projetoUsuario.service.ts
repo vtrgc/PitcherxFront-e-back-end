@@ -40,3 +40,20 @@ export async function listarIdsProjetosCriados(idUsuario: number): Promise<Set<n
     (vinculos ?? []).filter((v) => v.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR).map((v) => v.projetoId)
   );
 }
+
+/**
+ * Vínculos que tornam alguém PARTE de um projeto para fins de contrato e do registro de
+ * autoria (verificador antiplágio): criador, sócio e investidor. "Visualizador" não é parte.
+ */
+export const VINCULOS_PARTE_CONTRATO: number[] = [TIPO_VINCULO_ID.CRIADOR, TIPO_VINCULO_ID.SOCIO, TIPO_VINCULO_ID.INVESTIDOR];
+
+export function ehParteDoContrato(vinculos: Pick<ProjetoUsuario, "usuarioId" | "tipoVinculoId">[], idUsuario: number | null | undefined): boolean {
+  if (!idUsuario) return false;
+  return vinculos.some((v) => v.usuarioId === idUsuario && VINCULOS_PARTE_CONTRATO.includes(v.tipoVinculoId));
+}
+
+/** IDs dos projetos em que o usuário é parte (criador, sócio ou investidor). */
+export async function listarIdsProjetosParte(idUsuario: number): Promise<Set<number>> {
+  const vinculos = await listarPorUsuario(idUsuario);
+  return new Set((vinculos ?? []).filter((v) => VINCULOS_PARTE_CONTRATO.includes(v.tipoVinculoId)).map((v) => v.projetoId));
+}

@@ -25,6 +25,8 @@ import {
   Loader2,
   Trash2,
   UserPlus,
+  Building2,
+  Vote,
   type LucideIcon,
 } from "lucide-react";
 import BotaoConexao from "../conexao/BotaoConexao";
@@ -34,26 +36,28 @@ import { atualizarBanner, removerBanner } from "../../services/perfilUsuario.ser
 import EmptyState from "../EmptyState";
 import PostCard from "../PostCard";
 import ImagemRemota from "../ImagemRemota";
+import ResumoFinanceiroMini from "../projeto/ResumoFinanceiroMini";
 import Avatar from "../ui/Avatar";
 import Alerta from "../ui/Alerta";
 import { cls } from "../ui/estilos";
 import { useFeedback } from "../ui/FeedbackProvider";
 import CapaPerfil from "./CapaPerfil";
+import CartaoVerificacao from "./CartaoVerificacao";
 import { useAuth } from "../../context/AuthContext";
 import { useUsuario } from "../../hook/useUsuario";
 import { useDadosPerfil } from "../../hook/useDadosPerfil";
-import { linkExternoSeguro } from "../../lib/image";
 import { mensagemErro } from "../../lib/api";
-import { completudePerfil, localizacaoPublica } from "../../lib/perfil";
-import { listarPostagens } from "../../services/postagem.service";
+import { completudePerfil, formatarPercentual, linkedinDoPerfil, localizacaoPublica } from "../../lib/perfil";
+import { detalharPostagens, listarPostagens } from "../../services/postagem.service";
 import { listarPorUsuario } from "../../services/projetoUsuario.service";
 import { listarProjetos } from "../../services/projeto.service";
 import { obterRolePrincipal, ROLE_LABEL } from "../../services/usuario.service";
+import { ehEmpresa, projetosApoiadosPor } from "../../services/empresa.service";
 import { Post } from "../../types/Post";
 import { Projeto } from "../../types/Projeto";
 import { ProjetoUsuario, rotuloVinculo } from "../../types/ProjetoUsuario";
 
-type Aba = "publicacoes" | "projetos";
+type Aba = "publicacoes" | "projetos" | "apoiados";
 type Estado<T> = { dados: T; carregando: boolean; erro: string };
 const POSTS_POR_PAGINA = 10;
 
@@ -73,6 +77,7 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
   const { usuario: logado, isAdmin: logadoAdmin } = useAuth();
   const { notificar, confirmar } = useFeedback();
   const proprio = logado?.idUsuario === id;
+  const idLogado = logado?.idUsuario ?? null;
 
   const { usuario, loading, indisponivel, recarregar: recarregarUsuario } = useUsuario(id);
   const dados = useDadosPerfil(id);
@@ -138,21 +143,28 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
   const [posts, setPosts] = useState<Estado<Post[]>>({ dados: [], carregando: true, erro: "" });
   const [projetos, setProjetos] = useState<Estado<ProjetoDoPerfil[]>>({ dados: [], carregando: true, erro: "" });
   const [aba, setAba] = useState<Aba>("publicacoes");
+  // Empresas: projetos que a empresa apoiou (votou/curtiu). Carregado ao abrir a aba.
+  const [todosProjetos, setTodosProjetos] = useState<Projeto[]>([]);
+  const [apoiados, setApoiados] = useState<Estado<Projeto[]> & { carregado: boolean; falhas: number }>({
+    dados: [],
+    carregando: false,
+    erro: "",
+    carregado: false,
+    falhas: 0,
+  });
   const [limitePosts, setLimitePosts] = useState(POSTS_POR_PAGINA);
 
   const carregarPosts = useCallback(async () => {
     setPosts((p) => ({ ...p, carregando: true, erro: "" }));
     try {
       const todos = await listarPostagens();
-      setPosts({
-        dados: (todos ?? []).filter((p) => p.usuarioId === id).sort((a, b) => b.idPostagem - a.idPostagem),
-        carregando: false,
-        erro: "",
-      });
+      const doPerfil = (todos ?? []).filter((p) => p.usuarioId === id).sort((a, b) => b.idPostagem - a.idPostagem);
+      // Curtidas e quantidade de comentários já aparecem antes de abrir cada publicação.
+      setPosts({ dados: await detalharPostagens(doPerfil, idLogado), carregando: false, erro: "" });
     } catch (error) {
       setPosts({ dados: [], carregando: false, erro: mensagemErro(error, "Não foi possível carregar as publicações.") });
     }
-  }, [id]);
+  }, [id, idLogado]);
 
   const carregarProjetos = useCallback(async () => {
     setProjetos((p) => ({ ...p, carregando: true, erro: "" }));
@@ -161,6 +173,7 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
         listarPorUsuario(id),
         listarProjetos().catch(() => [] as Projeto[]),
       ]);
+      setTodosProjetos(lista ?? []);
       const porId = new Map((lista ?? []).map((p) => [p.idProjeto, p]));
       const agrupados = new Map<number, ProjetoDoPerfil>();
       for (const v of (vinculos ?? []) as ProjetoUsuario[]) {
@@ -182,7 +195,30 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
   }, [id, carregarPosts, carregarProjetos]);
 
   const perfil = dados.perfil;
-  const linkedin = linkExternoSeguro(perfil?.linkedin);
+  const empresa = ehEmpresa(usuario, perfil);
+
+  const carregarApoiados = useCallback(async () => {
+    setApoiados((a) => ({ ...a, carregando: true, erro: "" }));
+    try {
+      const lista = todosProjetos.length > 0 ? todosProjetos : await listarProjetos();
+      const { ids, falhas } = await projetosApoiadosPor(id, lista.map((p) => p.idProjeto));
+      const set = new Set(ids);
+      setApoiados({
+        dados: lista.filter((p) => set.has(p.idProjeto)).sort((a, b) => b.idProjeto - a.idProjeto),
+        carregando: false,
+        erro: "",
+        carregado: true,
+        falhas,
+      });
+    } catch (error) {
+      setApoiados({ dados: [], carregando: false, erro: mensagemErro(error, "Não foi possível carregar os projetos apoiados."), carregado: false, falhas: 0 });
+    }
+  }, [id, todosProjetos]);
+
+  useEffect(() => {
+    if (aba === "apoiados" && empresa && !apoiados.carregado && !apoiados.carregando && !apoiados.erro) carregarApoiados();
+  }, [aba, empresa, apoiados.carregado, apoiados.carregando, apoiados.erro, carregarApoiados]);
+  const linkedin = linkedinDoPerfil(perfil);
   const localizacao = localizacaoPublica(dados.endereco);
   const rolePrincipal = obterRolePrincipal(usuario?.roles?.length ? usuario.roles : proprio ? logado?.roles : []);
   const ehAdminPerfil = rolePrincipal === "ADMIN";
@@ -372,7 +408,13 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
               </h1>
               {rolePrincipal !== "USUARIO" && (
                 <span className={cls.chip}>
-                  <ShieldCheck size={12} aria-hidden="true" /> {ROLE_LABEL[rolePrincipal] ?? rolePrincipal}
+                  {rolePrincipal === "EMPRESA" ? <Building2 size={12} aria-hidden="true" /> : <ShieldCheck size={12} aria-hidden="true" />}{" "}
+                  {ROLE_LABEL[rolePrincipal] ?? rolePrincipal}
+                </span>
+              )}
+              {rolePrincipal === "USUARIO" && empresa && (
+                <span className={cls.chip} title="Perfil cadastrado com CNPJ">
+                  <Building2 size={12} aria-hidden="true" /> Empresa
                 </span>
               )}
               {usuario.active === false && <span className={cls.chipInativo}>Conta desativada</span>}
@@ -468,7 +510,8 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <p className={cls.eyebrow}>
-                <Sparkles size={14} aria-hidden="true" /> Seu perfil está {completude.percentual}% completo
+                <Sparkles size={14} aria-hidden="true" /> Seu perfil está {formatarPercentual(completude.percentual)} completo ({completude.feitos} de{" "}
+                {completude.total} itens)
               </p>
               <h2 id="completar-titulo" className={`${cls.h2} mt-1`}>
                 Deixe seu perfil pronto para conexões
@@ -483,7 +526,8 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-valuenow={completude.percentual}
+            aria-valuenow={Math.round(completude.percentual * 100) / 100}
+            aria-valuetext={`${formatarPercentual(completude.percentual)} (${completude.feitos} de ${completude.total} itens)`}
             aria-label="Progresso do perfil"
           >
             <div className="h-full rounded-full bg-brand-500 transition-[width] duration-500" style={{ width: `${completude.percentual}%` }} />
@@ -567,6 +611,16 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
               </p>
             )}
           </section>
+
+          {proprio && !logadoAdmin && (
+            <CartaoVerificacao
+              email={usuario.emailUsuario}
+              ativo={usuario.active}
+              identificador={perfil?.identificador ?? null}
+              carregando={dados.carregando}
+              erroPerfil={!!dados.erro}
+            />
+          )}
         </aside>
 
         <section className="min-w-0 lg:order-1" aria-label="Atividade">
@@ -575,7 +629,10 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
               [
                 { chave: "publicacoes", rotulo: "Publicações", icone: FileText, total: posts.carregando || posts.erro ? null : posts.dados.length },
                 { chave: "projetos", rotulo: "Projetos", icone: Briefcase, total: projetos.carregando || projetos.erro ? null : totalProjetos },
-              ] as const
+                ...(empresa
+                  ? [{ chave: "apoiados", rotulo: "Apoiados", icone: Vote, total: apoiados.carregado ? apoiados.dados.length : null }]
+                  : []),
+              ] as { chave: Aba; rotulo: string; icone: LucideIcon; total: number | null }[]
             ).map(({ chave, rotulo, icone: Icone, total }) => {
               const ativa = aba === chave;
               return (
@@ -603,7 +660,40 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
             })}
           </div>
 
-          {aba === "publicacoes" ? (
+          {aba === "apoiados" && empresa ? (
+            <div role="tabpanel" id="painel-apoiados" aria-labelledby="aba-apoiados" className="pt-5">
+              <p className="mb-4 text-[13px] text-ink-500">
+                Projetos em que {proprio ? "sua empresa" : "esta empresa"} votou (curtiu). Cada voto aparece na seção Votos da página do projeto.
+              </p>
+              {apoiados.carregando ? (
+                <div className="space-y-3" aria-label="Carregando projetos apoiados">
+                  <div className={`${cls.skeleton} h-16 w-full rounded-xl`} />
+                  <div className={`${cls.skeleton} h-16 w-full rounded-xl`} />
+                </div>
+              ) : apoiados.erro ? (
+                <Alerta onTentarNovamente={carregarApoiados}>{apoiados.erro}</Alerta>
+              ) : apoiados.dados.length === 0 ? (
+                <div className={cls.card}>
+                  <EmptyState icon={Vote} title="Nenhum projeto apoiado ainda" description="Quando a empresa votar em um projeto, ele aparece aqui." />
+                </div>
+              ) : (
+                <ul className="grid gap-3 sm:grid-cols-2">
+                  {apoiados.dados.map((p) => (
+                    <li key={p.idProjeto}>
+                      <Link href={`/projetos/${p.idProjeto}`} className={`${cls.card} group block h-full p-4 hover:border-brand-200`}>
+                        <h3 className="truncate font-display text-[15px] font-bold text-ink-900 group-hover:text-brand-700">{p.nomeProjeto}</h3>
+                        {p.descricaoProjeto && <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-ink-500">{p.descricaoProjeto}</p>}
+                        <ResumoFinanceiroMini ficha={p.ficha} className="mt-3" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {apoiados.falhas > 0 && (
+                <p className="mt-3 text-[12px] text-amber-700">Não foi possível verificar {apoiados.falhas} projeto(s).</p>
+              )}
+            </div>
+          ) : aba === "publicacoes" ? (
             <div role="tabpanel" id="painel-publicacoes" aria-labelledby="aba-publicacoes" className="pt-5">
               {posts.carregando ? (
                 <div className="space-y-3" aria-label="Carregando publicações">
@@ -713,6 +803,7 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
                           {item.projeto?.descricaoProjeto && (
                             <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-ink-500">{item.projeto.descricaoProjeto}</p>
                           )}
+                          <ResumoFinanceiroMini ficha={item.projeto?.ficha} className="mt-3" />
                         </div>
                       </Link>
                     </li>
