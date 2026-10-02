@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Loader2, Save, Trash2 } from "lucide-react";
+import { useConsultaCep } from "../hook/useConsultaCep";
 import { mensagemErro } from "../lib/api";
+import { EnderecoCep, formatarCep } from "../lib/cep";
 import { somenteDigitos } from "../lib/validacao";
 import { LIMITES } from "../lib/limites";
 import { Endereco, EnderecoRequest, UFS } from "../types/Endereco";
@@ -10,6 +12,7 @@ import { atualizarEndereco, criarEndereco, excluirEndereco } from "../services/e
 import { cls } from "./ui/estilos";
 import Alerta from "./ui/Alerta";
 import { useFeedback } from "./ui/FeedbackProvider";
+import StatusCep from "./perfil/StatusCep";
 
 type Campos = Omit<EnderecoRequest, "usuarioId" | "numeroCasa"> & { numeroCasa: string };
 type Erros = Partial<Record<keyof Campos, string>>;
@@ -65,6 +68,13 @@ export default function FormEndereco({
   function set<K extends keyof Campos>(campo: K, valor: Campos[K]) {
     setCampos((c) => ({ ...c, [campo]: valor }));
   }
+
+  // CEP completo: preenche logradouro, bairro e UF (editáveis). A cidade não é salva pela API.
+  const preencher = useCallback((e: EnderecoCep) => {
+    setCampos((c) => ({ ...c, logradouro: e.logradouro || c.logradouro, bairro: e.bairro || c.bairro, uf: e.uf || c.uf }));
+  }, []);
+  const cep = useConsultaCep(preencher);
+  const cidade = cep.estado.status === "encontrado" ? cep.estado.endereco.cidade : "";
 
   async function salvar() {
     const v = validarEndereco(campos);
@@ -139,7 +149,23 @@ export default function FormEndereco({
     >
       {erro && <Alerta className="mb-5">{erro}</Alerta>}
       <div className={`grid gap-4 ${compacto ? "md:grid-cols-3" : "sm:grid-cols-2 md:grid-cols-3"}`}>
-        {campo("cep", "CEP", { inputMode: "numeric", maxLength: 9, placeholder: "00000000", autoComplete: "postal-code" })}
+        <div>
+          {campo("cep", "CEP", {
+            inputMode: "numeric",
+            maxLength: 9,
+            placeholder: "00000-000",
+            autoComplete: "postal-code",
+            value: formatarCep(campos.cep),
+            "aria-busy": cep.estado.status === "carregando",
+            onChange: (e) => {
+              const novo = formatarCep(e.target.value);
+              set("cep", novo);
+              cep.aoDigitar(novo);
+            },
+          })}
+          <StatusCep estado={cep.estado} id="end-cep-status" onRepetir={cep.repetir} />
+          {cidade && <p className="mt-0.5 text-[12px] text-ink-500">Cidade: {cidade} (não é salva pela API)</p>}
+        </div>
         <div>
           <label htmlFor="end-uf" className={cls.label}>
             UF

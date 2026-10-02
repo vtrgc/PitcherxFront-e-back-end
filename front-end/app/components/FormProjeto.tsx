@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ImagePlus, Loader2, Save, X } from "lucide-react";
+import { CircleDollarSign, ImagePlus, Loader2, Save, X } from "lucide-react";
 import { apiDateToInput, hojeServidorInput, inputDateToApi, validarDatasProjeto } from "../lib/date";
 import { LIMITES } from "../lib/limites";
 import { isValidImageUrl } from "../lib/image";
 import { mensagemErro } from "../lib/api";
+import { CamposFicha, ErrosFicha, USO_RECURSOS_MAX, camposDaFicha, montarDescricaoProjeto, validarCamposFicha } from "../lib/fichaProjeto";
 import { Projeto, ProjetoRequest } from "../types/Projeto";
 import { TipoProjeto } from "../types/TipoProjeto";
 import { cls } from "./ui/estilos";
@@ -16,6 +17,10 @@ import SeletorImagens from "./SeletorImagens";
 /**
  * Formulário de projeto (criação e edição). Replica as validações do ProjetoRequestDTO:
  * nome/descrição obrigatórios, início hoje ou futuro, término futuro e tipo obrigatório.
+ *
+ * Dados financeiros (meta, captado, participação, investimento mínimo e uso dos recursos)
+ * são opcionais. O backend não tem esses campos: eles são guardados no fim da descrição
+ * (ver lib/fichaProjeto) e nunca aparecem no texto exibido.
  *
  * Imagens: na criação, o usuário pode escolher arquivos (enviados depois por
  * PUT /projeto/{id}/imagens) ou informar uma URL. Na edição, a galeria é gerenciada na
@@ -42,6 +47,8 @@ export default function FormProjeto({
   const edicao = !!projeto;
   const [urlImagem, setUrlImagem] = useState("");
   const [arquivos, setArquivos] = useState<File[]>([]);
+  const [ficha, setFicha] = useState<CamposFicha>(() => camposDaFicha(projeto?.ficha));
+  const [errosFicha, setErrosFicha] = useState<ErrosFicha>({});
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -71,12 +78,19 @@ export default function FormProjeto({
       return;
     }
 
+    const financeiro = validarCamposFicha(ficha);
+    setErrosFicha(financeiro.erros);
+    if (Object.keys(financeiro.erros).length > 0) {
+      setErro("Revise os dados financeiros destacados.");
+      return;
+    }
+
     setErro("");
     setSalvando(true);
     try {
       await onEnviar({
         nomeProjeto: nome.trim(),
-        descricaoProjeto: descricao.trim(),
+        descricaoProjeto: montarDescricaoProjeto(descricao, financeiro.ficha),
         dataInicioProjeto: inputDateToApi(dataInicio),
         dataFimProjeto: inputDateToApi(dataFim),
         tipoProjetoId: Number(tipoProjetoId),
@@ -186,6 +200,52 @@ export default function FormProjeto({
           </p>
         </div>
 
+        <fieldset className="md:col-span-2 rounded-xl border border-ink-100 p-4" disabled={salvando}>
+          <legend className="flex items-center gap-1.5 px-1 text-[13px] font-semibold text-ink-800">
+            <CircleDollarSign size={15} aria-hidden="true" /> Dados financeiros <span className="font-normal text-ink-400">(opcional)</span>
+          </legend>
+          <p className="mb-3 text-[12.5px] text-ink-500">
+            Aparecem na página do projeto (meta, progresso da captação e participação oferecida). Deixe em branco o que não quiser
+            divulgar.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <CampoFicha id="meta" rotulo="Meta de captação (R$)" placeholder="Ex.: 100.000,00" valor={ficha.meta} erro={errosFicha.meta} onChange={(v) => setFicha((f) => ({ ...f, meta: v }))} />
+            <CampoFicha id="captado" rotulo="Valor já captado (R$)" placeholder="Ex.: 65.000,00" valor={ficha.captado} erro={errosFicha.captado} onChange={(v) => setFicha((f) => ({ ...f, captado: v }))} />
+            <CampoFicha
+              id="participacao"
+              rotulo="Participação oferecida (%)"
+              placeholder="Ex.: 15"
+              valor={ficha.participacao}
+              erro={errosFicha.participacao}
+              onChange={(v) => setFicha((f) => ({ ...f, participacao: v }))}
+            />
+            <CampoFicha
+              id="minimo"
+              rotulo="Investimento mínimo (R$)"
+              placeholder="Ex.: 5.000,00"
+              valor={ficha.investimentoMinimo}
+              erro={errosFicha.investimentoMinimo}
+              onChange={(v) => setFicha((f) => ({ ...f, investimentoMinimo: v }))}
+            />
+            <div className="sm:col-span-2">
+              <label htmlFor="proj-ficha-uso" className={cls.label}>
+                Uso dos recursos
+              </label>
+              <textarea
+                id="proj-ficha-uso"
+                value={ficha.usoRecursos}
+                maxLength={USO_RECURSOS_MAX}
+                rows={2}
+                onChange={(e) => setFicha((f) => ({ ...f, usoRecursos: e.target.value }))}
+                placeholder="Ex.: 40% marketing, 35% desenvolvimento, 25% operação"
+                aria-invalid={!!errosFicha.usoRecursos}
+                className={`${cls.input} resize-y`}
+              />
+              {errosFicha.usoRecursos && <p className="mt-1 text-[13px] text-red-600">{errosFicha.usoRecursos}</p>}
+            </div>
+          </div>
+        </fieldset>
+
         {!edicao && (
           <div className="md:col-span-2 space-y-3">
             <div>
@@ -225,5 +285,45 @@ export default function FormProjeto({
         </button>
       </div>
     </form>
+  );
+}
+
+function CampoFicha({
+  id,
+  rotulo,
+  placeholder,
+  valor,
+  erro,
+  onChange,
+}: {
+  id: string;
+  rotulo: string;
+  placeholder: string;
+  valor: string;
+  erro?: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label htmlFor={`proj-ficha-${id}`} className={cls.label}>
+        {rotulo}
+      </label>
+      <input
+        id={`proj-ficha-${id}`}
+        inputMode="decimal"
+        value={valor}
+        maxLength={24}
+        onChange={(e) => onChange(e.target.value.replace(/[^\d.,R$\s%]/g, ""))}
+        placeholder={placeholder}
+        aria-invalid={!!erro}
+        aria-describedby={erro ? `proj-ficha-${id}-erro` : undefined}
+        className={cls.input}
+      />
+      {erro && (
+        <p id={`proj-ficha-${id}-erro`} className="mt-1 text-[13px] text-red-600">
+          {erro}
+        </p>
+      )}
+    </div>
   );
 }

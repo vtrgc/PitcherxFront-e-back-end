@@ -99,7 +99,7 @@ export default function CamposProfissional({
 
       <div>
         <label htmlFor={id("linkedin")} className={cls.label}>
-          LinkedIn
+          LinkedIn <span className="font-normal text-ink-400">(opcional)</span>
         </label>
         <input
           id={id("linkedin")}
@@ -112,10 +112,14 @@ export default function CamposProfissional({
           onChange={(e) => set("linkedin", e.target.value)}
           placeholder="linkedin.com/in/seu-usuario"
           aria-invalid={!!erros.linkedin}
-          aria-describedby={erros.linkedin ? id("linkedin-erro") : undefined}
+          aria-describedby={erros.linkedin ? id("linkedin-erro") : id("linkedin-ajuda")}
           className={cls.input}
         />
-        {erroDe("linkedin")}
+        {erroDe("linkedin") ?? (
+          <p id={id("linkedin-ajuda")} className="mt-1 text-[12.5px] text-ink-400">
+            Não é obrigatório. Se preferir, deixe em branco.
+          </p>
+        )}
       </div>
 
       <div>

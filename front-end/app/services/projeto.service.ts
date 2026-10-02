@@ -1,26 +1,46 @@
 import { api } from "../lib/api";
+import { lerDescricaoProjeto } from "../lib/fichaProjeto";
 import { FiltroBuscaProjeto, Projeto, ProjetoRequest } from "../types/Projeto";
 
-export function listarProjetos() {
-  return api<Projeto[]>("/projeto");
+/**
+ * Toda resposta de projeto passa por aqui: `descricaoProjeto` fica só com o texto visível e
+ * a ficha financeira guardada no fim da descrição vai para `ficha` (ver lib/fichaProjeto).
+ */
+export function normalizarProjeto(projeto: Projeto): Projeto {
+  if (!projeto || typeof projeto !== "object") return projeto;
+  const { texto, ficha } = lerDescricaoProjeto(projeto.descricaoProjeto);
+  return { ...projeto, descricaoProjeto: texto, ficha };
 }
 
-export function buscarProjeto(id: number) {
-  return api<Projeto>(`/projeto/${id}`);
+function normalizarLista(lista: Projeto[] | null | undefined): Projeto[] {
+  return (lista ?? []).map(normalizarProjeto);
 }
 
-export function criarProjeto(data: ProjetoRequest) {
-  return api<Projeto>("/projeto", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+export async function listarProjetos() {
+  return normalizarLista(await api<Projeto[]>("/projeto"));
 }
 
-export function atualizarProjeto(id: number, data: ProjetoRequest) {
-  return api<Projeto>(`/projeto/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
-  });
+export async function buscarProjeto(id: number) {
+  return normalizarProjeto(await api<Projeto>(`/projeto/${id}`));
+}
+
+/** `data.descricaoProjeto` já deve vir montado com `montarDescricaoProjeto` (texto + ficha). */
+export async function criarProjeto(data: ProjetoRequest) {
+  return normalizarProjeto(
+    await api<Projeto>("/projeto", {
+      method: "POST",
+      body: JSON.stringify(data),
+    })
+  );
+}
+
+export async function atualizarProjeto(id: number, data: ProjetoRequest) {
+  return normalizarProjeto(
+    await api<Projeto>(`/projeto/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    })
+  );
 }
 
 export function excluirProjeto(id: number) {
@@ -33,23 +53,24 @@ export function excluirProjeto(id: number) {
  * GET /projeto/buscar — filtros combinados com E. Observação do contrato: o backend só
  * aplica `dataInicioAte` quando `dataInicioDe` também é enviado.
  */
-export function buscarProjetos(filtro: FiltroBuscaProjeto) {
+export async function buscarProjetos(filtro: FiltroBuscaProjeto) {
   const params = new URLSearchParams();
   for (const [chave, valor] of Object.entries(filtro)) {
     if (typeof valor === "string" && valor.trim()) params.set(chave, valor.trim());
   }
   const query = params.toString();
-  return api<Projeto[]>(`/projeto/buscar${query ? `?${query}` : ""}`);
+  return normalizarLista(await api<Projeto[]>(`/projeto/buscar${query ? `?${query}` : ""}`));
 }
 
 /**
  * PUT /projeto/{id}/imagens (multipart, campo "arquivos", 1 a 10) — substitui a galeria.
  * Somente usuários vinculados ao projeto (projeto-usuario) ou ADMIN.
  */
-export function substituirImagensProjeto(id: number, arquivos: File[]) {
+export async function substituirImagensProjeto(id: number, arquivos: File[]) {
   const formData = new FormData();
   arquivos.forEach((arquivo) => formData.append("arquivos", arquivo));
-  return api<Projeto>(`/projeto/${id}/imagens`, { method: "PUT", body: formData, timeoutMs: 120000 });
+  const projeto = await api<Projeto>(`/projeto/${id}/imagens`, { method: "PUT", body: formData, timeoutMs: 120000 });
+  return projeto ? normalizarProjeto(projeto) : projeto;
 }
 
 /** DELETE /projeto/{id}/imagens — remove todas as imagens. */

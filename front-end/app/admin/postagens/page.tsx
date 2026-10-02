@@ -215,7 +215,7 @@ export default function AdminPostagensPage() {
 
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <Link
-                        href={`/comentarios/${p.idPostagem}`}
+                        href={`/publicacao/${p.idPostagem}`}
                         className="inline-flex h-[2.35rem] w-[2.35rem] items-center justify-center rounded-full text-ink-500 transition-colors hover:bg-brand-50 hover:text-brand-700"
                         title="Abrir publicação"
                         aria-label={`Abrir a postagem ${p.tituloPostagem}`}

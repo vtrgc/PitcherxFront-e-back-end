@@ -296,8 +296,8 @@ function Assistente({ perfilInicial, enderecoInicialApi }: { perfilInicial: Perf
               Informações profissionais
             </h2>
             <p className={`${cls.textoSuave} mb-5 mt-1`}>
-              Mostre sua área de atuação e seu LinkedIn para quem procura parceiros e investidores. Para salvar, o servidor
-              exige os três campos juntos.
+              Mostre sua área de atuação para quem procura parceiros e investidores. Para salvar, informe a área de
+              atuação e o CPF/CNPJ; o LinkedIn é opcional.
             </p>
             <CamposProfissional valor={prof} onChange={setProf} erros={errosProf} desabilitado={salvando} prefixoId="cc-prof" />
           </>

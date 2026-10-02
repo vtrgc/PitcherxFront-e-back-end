@@ -213,7 +213,7 @@ function FormularioPerfil({
     if (Object.keys(eProf).length > 0 || Object.keys(eEnd).length > 0) {
       setErroGeral(
         Object.keys(eProf).length > 0 && !perfil && !profissionalVazio(prof)
-          ? "Revise os campos destacados. Para salvar as informações profissionais, o servidor exige área de atuação, LinkedIn e CPF/CNPJ juntos."
+          ? "Revise os campos destacados. Para salvar as informações profissionais, informe a área de atuação e o CPF/CNPJ (o LinkedIn é opcional)."
           : "Revise os campos destacados."
       );
       focarPrimeiroErro();
@@ -376,8 +376,8 @@ function FormularioPerfil({
             titulo="Informações profissionais"
             descricao={
               perfil
-                ? "Sua área de atuação e seu LinkedIn aparecem no perfil e em Explorar."
-                : "Opcional. Para salvar, preencha os três campos — o servidor exige todos juntos."
+                ? "Sua área de atuação (e o LinkedIn, se informado) aparecem no perfil e em Explorar."
+                : "Opcional. Para salvar, informe a área de atuação e o CPF/CNPJ — o LinkedIn não é obrigatório."
             }
           >
             <CamposProfissional valor={prof} onChange={setProf} erros={errosProf} desabilitado={salvando} />

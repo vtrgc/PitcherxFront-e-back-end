@@ -102,10 +102,10 @@ export function useAcoesConexao() {
   const deixarDeSeguir = useCallback(
     (outro: PessoaConexao) =>
       removerComConfirmacao(outro, "enviada", {
-        pergunta: `Deixar de seguir ${outro.nome}?`,
-        titulo: "Deixar de seguir",
-        botao: "Deixar de seguir",
-        sucesso: `Você deixou de seguir ${outro.nome}.`,
+        pergunta: `Parar de seguir ${outro.nome}?`,
+        titulo: "Parar de seguir",
+        botao: "Parar de seguir",
+        sucesso: `Você parou de seguir ${outro.nome}.`,
       }),
     [removerComConfirmacao]
   );
@@ -362,3 +362,6 @@ export function useMinhasConexoes({ automatico = true }: { automatico?: boolean 
     recusar: (p: PessoaConexao) => rodar(p, acoes.recusar),
   };
 }
+
+/** Estado e ações das conexões do usuário logado (retorno de `useMinhasConexoes`). */
+export type ConexoesUsuario = ReturnType<typeof useMinhasConexoes>;

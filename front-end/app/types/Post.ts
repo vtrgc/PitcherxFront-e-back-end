@@ -14,4 +14,6 @@ export interface Post {
   /** Preenchidos no front a partir de /curtida/status. */
   totalCurtidas?: number;
   usuarioCurtiu?: boolean;
+  /** Preenchido no front a partir de GET /comentario (quantidade de comentários da postagem). */
+  totalComentarios?: number;
 }

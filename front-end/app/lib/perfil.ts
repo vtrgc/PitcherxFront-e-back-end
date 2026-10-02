@@ -1,9 +1,11 @@
 /**
  * Regras dos dados de perfil que o backend REALMENTE armazena.
  *
- *  - Perfil profissional (`PerfilUsuarioRequestDTO`): linkedin, identificador (CPF/CNPJ)
- *    e idEspecialidade são TODOS obrigatórios (@NotBlank/@NotNull). Não é possível salvar
- *    só um deles. Colunas: `linkedin VARCHAR(80)`, `identificador VARCHAR(18)`.
+ *  - Perfil profissional (`PerfilUsuarioRequestDTO`): identificador (CPF/CNPJ) e
+ *    idEspecialidade são obrigatórios. O LinkedIn é OPCIONAL na interface, mas o DTO exige
+ *    `linkedin` não vazio (@NotBlank): quando a pessoa não informa, o front envia o marcador
+ *    `LINKEDIN_NAO_INFORMADO` e o trata como "sem LinkedIn" ao ler (ver `linkedinDoPerfil`).
+ *    Colunas: `linkedin VARCHAR(80)`, `identificador VARCHAR(18)`.
  *  - Endereço (`EnderecoRequestDTO`): cep (≤ 8), uf (2), bairro, logradouro, complemento
  *    e numeroCasa obrigatórios. Colunas originais: bairro/logradouro VARCHAR(155).
  *
@@ -17,6 +19,23 @@ import { Endereco, EnderecoRequest, UFS } from "../types/Endereco";
 import { PerfilUsuario, PerfilUsuarioRequest } from "../types/PerfilUsuario";
 
 export const LINKEDIN_MAX = 80;
+
+/**
+ * Valor gravado no campo `linkedin` quando a pessoa não informa o LinkedIn. O backend exige
+ * o campo preenchido; este marcador nunca é exibido nem vira link.
+ */
+export const LINKEDIN_NAO_INFORMADO = "nao-informado";
+
+/** O valor guardado é um LinkedIn de verdade (não vazio e não o marcador)? */
+export function linkedinInformado(valor?: string | null): boolean {
+  const v = (valor ?? "").trim();
+  return !!v && v.toLowerCase() !== LINKEDIN_NAO_INFORMADO;
+}
+
+/** Link seguro do LinkedIn de um perfil, ou null quando não informado. */
+export function linkedinDoPerfil(perfil: Pick<PerfilUsuario, "linkedin"> | null | undefined): string | null {
+  return linkedinInformado(perfil?.linkedin) ? linkExternoSeguro(perfil!.linkedin) : null;
+}
 export const TEXTO_ENDERECO_MAX = 155;
 
 // ---------------------------------------------------------------------------
@@ -33,7 +52,7 @@ export type ErrosProfissional = Partial<Record<keyof CamposProfissionalValor, st
 
 export function profissionalInicial(perfil: PerfilUsuario | null): CamposProfissionalValor {
   return {
-    linkedin: perfil?.linkedin ?? "",
+    linkedin: linkedinInformado(perfil?.linkedin) ? perfil!.linkedin : "",
     identificador: perfil?.identificador ?? "",
     idEspecialidade: perfil?.especialidade?.idEspecialidade ?? "",
   };
@@ -55,8 +74,10 @@ export function validarProfissional(v: CamposProfissionalValor): ErrosProfission
   const erros: ErrosProfissional = {};
   const link = linkExternoSeguro(v.linkedin);
   if (!v.idEspecialidade) erros.idEspecialidade = "Selecione sua área de atuação.";
-  if (!v.linkedin.trim()) erros.linkedin = "Informe o link do seu LinkedIn.";
-  else if (!link) erros.linkedin = "Informe um link válido (https://...).";
+  // LinkedIn é opcional: só é validado quando preenchido.
+  if (!v.linkedin.trim()) {
+    /* sem LinkedIn: permitido */
+  } else if (!link) erros.linkedin = "Informe um link válido (https://...).";
   else if (link.length > LINKEDIN_MAX) erros.linkedin = `O link pode ter no máximo ${LINKEDIN_MAX} caracteres.`;
   if (!v.identificador.trim()) erros.identificador = "Informe seu CPF ou CNPJ.";
   else if (!documentoValido(v.identificador)) erros.identificador = "CPF ou CNPJ inválido.";
@@ -65,7 +86,7 @@ export function validarProfissional(v: CamposProfissionalValor): ErrosProfission
 
 export function paraRequestProfissional(v: CamposProfissionalValor, idUsuario: number): PerfilUsuarioRequest {
   return {
-    linkedin: linkExternoSeguro(v.linkedin)!,
+    linkedin: v.linkedin.trim() ? linkExternoSeguro(v.linkedin)! : LINKEDIN_NAO_INFORMADO,
     identificador: formatarDocumento(v.identificador),
     idEspecialidade: Number(v.idEspecialidade),
     idUsuario,
@@ -171,13 +192,20 @@ export function completudePerfil(dados: {
   temFoto: boolean;
   temPerfilProfissional: boolean;
   temEndereco: boolean;
-}): { itens: ItemCompletude[]; percentual: number } {
+}): { itens: ItemCompletude[]; feitos: number; total: number; percentual: number } {
   const itens: ItemCompletude[] = [
     { chave: "foto", rotulo: "Foto de perfil", feito: dados.temFoto },
     { chave: "profissional", rotulo: "Informações profissionais", feito: dados.temPerfilProfissional },
     { chave: "localizacao", rotulo: "Localização", feito: dados.temEndereco },
   ];
-  // A conta (nome e e-mail) já existe desde o cadastro: conta como o primeiro quarto.
-  const percentual = Math.round(((1 + itens.filter((i) => i.feito).length) / (itens.length + 1)) * 100);
-  return { itens, percentual };
+  // Somente os itens listados contam: 0/3 = 0%, 1/3 ≈ 33,33%, 2/3 ≈ 66,67%, 3/3 = 100%.
+  const feitos = itens.filter((i) => i.feito).length;
+  const percentual = itens.length ? (feitos / itens.length) * 100 : 0;
+  return { itens, feitos, total: itens.length, percentual };
+}
+
+/** Percentual para exibição em pt-BR, com até 2 casas decimais (ex.: "66,67%", "100%"). */
+export function formatarPercentual(valor: number, casas = 2): string {
+  const seguro = Number.isFinite(valor) ? valor : 0;
+  return `${seguro.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: casas })}%`;
 }

@@ -2,16 +2,19 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Heart, Trash2, MessageSquare, Loader2, Send, Pencil, Save, X } from "lucide-react";
+import { Heart, Trash2, MessageSquare, Loader2, Send, Pencil, Save, X, Flag } from "lucide-react";
 import { Comentario } from "../types/Comentario";
 import { SubComentario } from "../types/SubComentario";
 import { useUsuario } from "../hook/useUsuario";
 import { useAuth } from "../context/AuthContext";
 import { useCurtida } from "../hook/useCurtida";
+import { useDenuncia } from "../hook/useDenuncia";
 import { mensagemErro } from "../lib/api";
 import { atualizarComentario, excluirComentario } from "../services/comentario.service";
 import { atualizarSubComentario, criarSubComentario, excluirSubComentario, listarSubComentarios } from "../services/subComentario.service";
 import { autorDaResposta, esquecerRespostaPropria, idsRespostasProprias, registrarRespostaPropria } from "../lib/autoriaRespostas";
+import ConteudoOcultado from "./denuncia/ConteudoOcultado";
+import ModalDenuncia from "./denuncia/ModalDenuncia";
 import Avatar from "./ui/Avatar";
 import { cls } from "./ui/estilos";
 import { useFeedback } from "./ui/FeedbackProvider";
@@ -53,6 +56,7 @@ export default function ComentarioCard({ comentario, aoAlterar }: Props) {
   const { notificar, confirmar } = useFeedback();
   const curtida = useCurtida("COMENTARIO", comentario.idComentario);
   const { carregar: carregarCurtida } = curtida;
+  const denuncia = useDenuncia("COMENTARIO", comentario.idComentario);
 
   const [respostas, setRespostas] = useState<SubComentario[]>([]);
   const [respostasCarregadas, setRespostasCarregadas] = useState(false);
@@ -75,6 +79,7 @@ export default function ComentarioCard({ comentario, aoAlterar }: Props) {
   // PUT/POST de comentários e respostas: somente USUARIO/EMPRESA no backend.
   const podeEditar = ehAutor && !isAdmin;
   const podeResponder = !!usuarioLogado && !isAdmin;
+  const podeDenunciar = denuncia.podeDenunciar && !ehAutor && !isAdmin;
 
   async function carregarRespostas() {
     setCarregandoRespostas(true);
@@ -159,11 +164,25 @@ export default function ComentarioCard({ comentario, aoAlterar }: Props) {
     }
   }
 
+  if (podeDenunciar && denuncia.denunciado) {
+    return (
+      <article className="py-4 border-b border-ink-100 last:border-b-0">
+        <ConteudoOcultado nome="este comentário" onDesfazer={denuncia.desfazer} />
+      </article>
+    );
+  }
+
   return (
     <article className="relative py-5 border-b border-ink-100 transition-colors first:pt-1 last:border-b-0">
+      <ModalDenuncia tipo="COMENTARIO" conteudoId={comentario.idComentario} aberto={denuncia.modalAberto} onFechar={denuncia.fechar} />
       <div className="flex items-start justify-between gap-3">
         <AutorInfo usuarioId={comentario.usuarioId} />
         <div className="flex shrink-0 items-center">
+          {podeDenunciar && (
+            <button type="button" onClick={denuncia.abrir} className={cls.btnIcone} aria-label="Denunciar comentário" title="Denunciar comentário">
+              <Flag size={15} />
+            </button>
+          )}
           {podeEditar && !editando && (
             <button
               type="button"
@@ -329,6 +348,7 @@ function RespostaItem({
   const { notificar } = useFeedback();
   const curtida = useCurtida("SUBCOMENTARIO", resposta.idSubComentario);
   const { carregar: carregarCurtida } = curtida;
+  const denuncia = useDenuncia("SUBCOMENTARIO", resposta.idSubComentario);
   const [editando, setEditando] = useState(false);
   const [texto, setTexto] = useState(resposta.textoSubComentario);
   const [salvando, setSalvando] = useState(false);
@@ -343,6 +363,7 @@ function RespostaItem({
   // PUT /sub-comentario: USUARIO/EMPRESA; DELETE: também ADMIN.
   const podeEditar = ehAutor && !isAdmin;
   const podeExcluir = ehAutor || isAdmin;
+  const podeDenunciar = denuncia.podeDenunciar && !ehAutor && !isAdmin;
 
   async function salvar() {
     if (!usuarioLogado || !texto.trim()) return;
@@ -362,11 +383,21 @@ function RespostaItem({
     }
   }
 
+  if (podeDenunciar && denuncia.denunciado) {
+    return <ConteudoOcultado nome="esta resposta" onDesfazer={denuncia.desfazer} className="!py-2" />;
+  }
+
   return (
     <div className="border-l-2 border-brand-100 pl-3">
+      <ModalDenuncia tipo="SUBCOMENTARIO" conteudoId={resposta.idSubComentario} aberto={denuncia.modalAberto} onFechar={denuncia.fechar} />
       <div className="flex items-start justify-between gap-2">
         {autorId ? <AutorInfo usuarioId={autorId} tamanho={28} /> : <AutorDesconhecido />}
         <div className="flex shrink-0 items-center">
+          {podeDenunciar && (
+            <button type="button" onClick={denuncia.abrir} className={`${cls.btnIcone} !h-7 !w-7`} aria-label="Denunciar resposta" title="Denunciar resposta">
+              <Flag size={13} />
+            </button>
+          )}
           {podeEditar && !editando && (
             <button
               type="button"

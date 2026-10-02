@@ -204,7 +204,7 @@ function ListaPropria({ aba, minhas }: { aba: Aba; minhas: Minhas }) {
             )}
             {aba === "seguindo" && (
               <button type="button" disabled={ocupado} onClick={() => minhas.deixarDeSeguir(pessoa)} className={`${cls.btnContorno} !px-3 !py-[0.45rem] !text-[12.5px]`}>
-                {ocupado ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <UserMinus size={14} aria-hidden="true" />} Deixar de seguir
+                {ocupado ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <UserMinus size={14} aria-hidden="true" />} Parar de seguir
               </button>
             )}
             {aba === "seguidores" && (
