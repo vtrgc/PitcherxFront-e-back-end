@@ -62,6 +62,17 @@
 - Pesquisa e paginação de todos os comentários (Interações)
 - Padrão visual único das páginas administrativas
 
+## Notificações de atividade
+
+- Notificação de novo comentário nas suas publicações (com autor e trecho)
+- Notificação de resposta aos seus comentários
+- Notificação de novas curtidas nas suas publicações e comentários
+- Notificação de novos votos nos seus projetos
+- Aviso na tela (toast) quando chega uma notificação nova
+- Contador do sino somando conexões + curtidas/comentários
+- Filtros "Curtidas e comentários" e "Conexões" na página de Notificações
+- Botão "Ver publicação" / "Ver projeto" em cada notificação
+
 ## Arquivos novos
 
 - `app/lib/cep.ts`
@@ -91,4 +102,8 @@
 - `app/components/admin/ListaAdmin.tsx`
 - `app/components/admin/ModalAdmin.tsx`
 - `app/components/admin/Paginacao.tsx`
+- `app/lib/atividade.ts`
+- `app/services/atividade.service.ts`
+- `app/components/NotificacaoAtividadeCard.tsx`
+- `tests/atividade.test.ts`
 - `RELATORIO_GRUPO10.md`

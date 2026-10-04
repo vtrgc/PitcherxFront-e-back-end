@@ -28,9 +28,10 @@ export default function RootLayout({
     <html lang="pt-BR" className="h-full antialiased">
       <body className="min-h-full flex flex-col font-sans">
         <AuthProvider>
-          <NotificacoesProvider>
-            <FeedbackProvider>{children}</FeedbackProvider>
-          </NotificacoesProvider>
+          {/* FeedbackProvider por fora: o NotificacoesProvider usa os avisos (toasts). */}
+          <FeedbackProvider>
+            <NotificacoesProvider>{children}</NotificacoesProvider>
+          </FeedbackProvider>
         </AuthProvider>
       </body>
     </html>

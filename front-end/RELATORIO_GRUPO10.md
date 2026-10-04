@@ -112,3 +112,38 @@ modal de edição altera status (`/usuario/ativar-desativar`) e adiciona perfis 
 | `npx next build` | OK |
 | E2E admin (Chromium) | 91/91: paginação (próxima, anterior, número, itens por página), pesquisa com/sem resultado, cadastrar e editar em Áreas, Subáreas, Especialidades, Tipos de projeto, Termos de contrato, Endereços (CEP) e Usuários; termos de postagem sem permissão; 12 páginas admin em 375, 768 e 1280 px sem rolagem horizontal nem erros de console; modal dentro da tela |
 | E2E usuário (regressão) | 91/91 |
+
+---
+
+# Notificações de curtidas, comentários, respostas e votos
+
+Escopo: somente o front-end. O back-end não foi alterado.
+
+**Por que no front:** o back-end só cria notificações de conexão (`ConexaoService.criarNotificacao`);
+não existe notificação de curtida/comentário nem endpoint para criá-las.
+
+**Como funciona** (`lib/atividade.ts`, `services/atividade.service.ts`):
+
+- A cada 60 s (com a aba visível), ao abrir Notificações e ao clicar em "Atualizar", o front consulta
+  `GET /postagem`, `GET /comentario`, `GET /sub-comentario`, os projetos em que o usuário é criador e
+  `GET /curtida/status/{eu}/{tipo}/{id}` das publicações, comentários e projetos dele.
+- Compara com o último estado visto (guardado no navegador, por usuário) e gera:
+  - **Novo comentário** — comentário de outra pessoa numa publicação do usuário (com autor e trecho);
+  - **Nova resposta** — resposta a um comentário do usuário (o back-end não envia o autor das
+    respostas, então aparece "Alguém respondeu"; respostas do próprio usuário são ignoradas);
+  - **Novas curtidas** — aumento das curtidas de outras pessoas numa publicação ou comentário
+    (a API não informa quem curtiu, só a quantidade);
+  - **Novo voto no projeto** — aumento das curtidas (votos) de outras pessoas num projeto criado pelo usuário.
+- Avisos novos aparecem como **toast**, entram no **contador do sino** (somados às notificações de
+  conexão do servidor) e na página **Notificações**, com filtros e "Ver publicação"/"Ver projeto".
+- Na primeira verificação, o que já existia vira histórico lido, sem horário.
+
+**Limitações:** o estado fica no navegador, então o aviso aparece no dispositivo em que a pessoa
+usa o PitcherX (em outro dispositivo, a primeira verificação vira histórico). Para notificações
+iguais em todos os dispositivos e com o nome de quem curtiu, o back-end precisaria criar
+`Notificacao` em `CurtidaService`, `ComentarioService` e `SubComentarioService`.
+
+**Verificações:** `tsc` 0 erros; ESLint 0 erros; `vitest` 101 testes (6 novos em
+`tests/atividade.test.ts`); `next build` OK; E2E de notificações 10/10 (histórico inicial, toast,
+contador do sino, comentário com autor, curtidas, voto, abrir publicação, marcar todas como lidas,
+novo aviso depois de tudo lido, sem erros de console); regressão: E2E usuário 91/91 e admin 91/91.
