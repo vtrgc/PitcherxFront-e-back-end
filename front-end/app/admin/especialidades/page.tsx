@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Award, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Award } from "lucide-react";
 
-import EmptyState from "../../components/EmptyState";
+import BarraPesquisaAdmin from "../../components/admin/BarraPesquisaAdmin";
+import CabecalhoAdmin from "../../components/admin/CabecalhoAdmin";
+import { CampoAdmin, LinhaAdmin, ListaAdmin } from "../../components/admin/ListaAdmin";
+import ModalAdmin from "../../components/admin/ModalAdmin";
+import Paginacao from "../../components/admin/Paginacao";
+import Alerta from "../../components/ui/Alerta";
+import { cls } from "../../components/ui/estilos";
+import { useFeedback } from "../../components/ui/FeedbackProvider";
+import { useListagemAdmin } from "../../hook/useListagemAdmin";
+import { useModalCadastro } from "../../hook/useModalCadastro";
 import { useRequireAdmin } from "../../hook/useRequireAdmin";
 import { mensagemErro } from "../../lib/api";
-import Alerta from "../../components/ui/Alerta";
-import { useFeedback } from "../../components/ui/FeedbackProvider";
-import { Especialidade } from "../../types/PerfilUsuario";
+import { LIMITES, mesmoNome } from "../../lib/limites";
+import { Especialidade, PerfilUsuario } from "../../types/PerfilUsuario";
 import {
   listarEspecialidades,
   criarEspecialidade,
@@ -16,188 +24,184 @@ import {
   excluirEspecialidade,
   listarPerfisUsuario,
 } from "../../services/perfilUsuario.service";
-import { LIMITES, mesmoNome } from "../../lib/limites";
 
+/** Especialidades (EspecialidadeRequestDTO: nomeEspecialidade, VARCHAR(120) UNIQUE; só ADMIN). */
 export default function AdminEspecialidadesPage() {
   const { pronto } = useRequireAdmin();
   const { notificar, confirmar } = useFeedback();
-  const [erroCarregamento, setErroCarregamento] = useState("");
 
   const [especialidades, setEspecialidades] = useState<Especialidade[]>([]);
+  const [perfis, setPerfis] = useState<PerfilUsuario[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState("");
+  const [erroCarregamento, setErroCarregamento] = useState("");
 
-  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const modal = useModalCadastro<Especialidade>();
   const [nome, setNome] = useState("");
-  const [salvando, setSalvando] = useState(false);
 
-  async function carregar() {
+  const carregar = useCallback(async () => {
     setLoading(true);
     setErroCarregamento("");
     try {
-      setEspecialidades((await listarEspecialidades()) ?? []);
+      const [lista, listaPerfis] = await Promise.all([listarEspecialidades(), listarPerfisUsuario().catch(() => null)]);
+      setEspecialidades([...(lista ?? [])].sort((a, b) => a.nomeEspecialidade.localeCompare(b.nomeEspecialidade, "pt-BR")));
+      setPerfis(listaPerfis);
     } catch (error) {
-      setErroCarregamento(mensagemErro(error, "Não foi possível carregar os dados."));
+      setErroCarregamento(mensagemErro(error, "Não foi possível carregar as especialidades."));
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     if (pronto) carregar();
-  }, [pronto]);
+  }, [pronto, carregar]);
 
-  function limparFormulario() {
-    setEditandoId(null);
+  const usoPorEspecialidade = useMemo(() => {
+    const mapa = new Map<number, number>();
+    perfis?.forEach((p) => {
+      const id = p.especialidade?.idEspecialidade;
+      if (id) mapa.set(id, (mapa.get(id) ?? 0) + 1);
+    });
+    return mapa;
+  }, [perfis]);
+
+  const lista = useListagemAdmin(especialidades, (e) => [e.nomeEspecialidade]);
+
+  function abrirNovo() {
     setNome("");
+    modal.abrirNovo();
   }
 
-  function editar(esp: Especialidade) {
-    setEditandoId(esp.idEspecialidade);
-    setNome(esp.nomeEspecialidade);
+  function abrirEdicao(e: Especialidade) {
+    setNome(e.nomeEspecialidade);
+    modal.abrirEdicao(e);
   }
 
-  async function salvar() {
-    if (!nome.trim()) {
-      setErro("Preencha o nome da especialidade.");
-      return;
-    }
-    const nomeLimpo = nome.trim();
-    if (nomeLimpo.length > LIMITES.nomeEspecialidade) {
-      setErro(`O nome pode ter no máximo ${LIMITES.nomeEspecialidade} caracteres.`);
-      return;
-    }
-    // nome_especialidade é UNIQUE no banco: um nome repetido seria recusado com erro 500.
-    if (especialidades.some((e) => e.idEspecialidade !== editandoId && mesmoNome(e.nomeEspecialidade, nomeLimpo))) {
-      setErro("Já existe uma especialidade com esse nome.");
-      return;
-    }
-    setErro("");
-    setSalvando(true);
-    try {
-      const dados = { nomeEspecialidade: nomeLimpo };
-      if (editandoId) {
-        await atualizarEspecialidade(editandoId, dados);
-      } else {
-        await criarEspecialidade(dados);
-      }
-      notificar(editandoId ? "Alterações salvas." : "Registro criado.", "sucesso");
-      limparFormulario();
-      await carregar();
-    } catch (error) {
-      setErro(mensagemErro(error, "Não foi possível salvar a especialidade. Verifique se o nome já não está em uso."));
-    } finally {
-      setSalvando(false);
-    }
+  function salvar() {
+    const idAtual = modal.registro?.idEspecialidade ?? null;
+    modal.salvar({
+      validar: () => {
+        const n = nome.trim();
+        if (!n) return "Preencha o nome da especialidade.";
+        if (n.length > LIMITES.nomeEspecialidade) return `O nome pode ter no máximo ${LIMITES.nomeEspecialidade} caracteres.`;
+        // nome_especialidade é UNIQUE no banco: um nome repetido seria recusado com erro 500.
+        if (especialidades.some((e) => e.idEspecialidade !== idAtual && mesmoNome(e.nomeEspecialidade, n))) return "Já existe uma especialidade com esse nome.";
+        return null;
+      },
+      enviar: () => {
+        const dados = { nomeEspecialidade: nome.trim() };
+        return idAtual ? atualizarEspecialidade(idAtual, dados) : criarEspecialidade(dados);
+      },
+      sucesso: idAtual ? "Especialidade atualizada." : "Especialidade cadastrada.",
+      falha: "Não foi possível salvar a especialidade. Verifique se o nome já não está em uso.",
+      depois: carregar,
+    });
   }
 
-  async function excluir(id: number) {
+  async function excluir(esp: Especialidade) {
     // No banco, perfil_usuario.especialidade_id tem ON DELETE CASCADE: excluir uma
     // especialidade em uso APAGARIA os perfis profissionais de quem a escolheu.
     let emUso = 0;
     try {
-      emUso = ((await listarPerfisUsuario()) ?? []).filter((p) => p.especialidade?.idEspecialidade === id).length;
+      emUso = ((await listarPerfisUsuario()) ?? []).filter((p) => p.especialidade?.idEspecialidade === esp.idEspecialidade).length;
     } catch (error) {
       notificar(mensagemErro(error, "Não foi possível verificar se a especialidade está em uso. Tente novamente."));
       return;
     }
     if (emUso > 0) {
       notificar(
-        `Esta especialidade está em uso por ${emUso} perfil${emUso === 1 ? "" : "s"}. Excluí-la apagaria esses perfis profissionais; renomeie-a em vez de excluir.`
+        `Esta especialidade está em uso por ${emUso} perfil${emUso === 1 ? "" : "s"}. Excluí-la apagaria esses perfis profissionais; edite o nome em vez de excluir.`
       );
       return;
     }
-    if (!(await confirmar("Deseja realmente excluir esta especialidade?", { titulo: "Confirmar exclusão", perigo: true }))) return;
+    if (!(await confirmar(`Excluir a especialidade "${esp.nomeEspecialidade}"?`, { titulo: "Excluir especialidade", perigo: true }))) return;
     try {
-      await excluirEspecialidade(id);
-      notificar("Registro excluído.", "sucesso");
+      await excluirEspecialidade(esp.idEspecialidade);
+      notificar("Especialidade excluída.", "sucesso");
       await carregar();
     } catch (error) {
       notificar(mensagemErro(error, "Não foi possível excluir (o registro pode estar em uso)."));
     }
   }
 
-  if (!pronto) {
-    return (
-      <>
-        <div className="relative overflow-hidden bg-ink-100 after:content-[''] after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/65 after:to-transparent after:animate-skeleton-sweep h-24 w-full rounded-2xl" />
-      </>
-    );
-  }
+  if (!pronto) return <div className={`${cls.skeleton} h-24 w-full rounded-2xl`} />;
 
   return (
     <>
-      <div className="rounded-2xl border border-ink-100 bg-white transition-[box-shadow,border-color,transform] duration-200 p-4 sm:p-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-            <Award size={19} />
-          </div>
-          <div>
-            <h1 className="font-display text-[17px] font-bold text-ink-900">Especialidades</h1>
-            <p className="text-[0.8125rem] text-ink-500 mt-0.5">Especialidades profissionais escolhidas no cadastro de perfil.</p>
-          </div>
-        </div>
-      </div>
+      <CabecalhoAdmin
+        icone={Award}
+        titulo="Especialidades"
+        descricao="Áreas de atuação que os usuários escolhem no perfil profissional."
+        total={loading ? null : especialidades.length}
+        rotuloTotal={["especialidade", "especialidades"]}
+        onCadastrar={abrirNovo}
+      />
 
-      <form
-        noValidate
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!salvando) salvar();
-        }}
-        className="rounded-2xl border border-ink-100 bg-white transition-[box-shadow,border-color,transform] duration-200 p-6"
+      <BarraPesquisaAdmin
+        valor={lista.termo}
+        onChange={lista.setTermo}
+        placeholder="Pesquisar por nome..."
+        rotulo="Pesquisar especialidades"
+        resultado={`${lista.total} resultado${lista.total === 1 ? "" : "s"}`}
+      />
+
+      <ListaAdmin
+        carregando={loading}
+        erro={erroCarregamento}
+        onTentarNovamente={carregar}
+        vazio={especialidades.length === 0}
+        semResultado={lista.total === 0}
+        termo={lista.termo}
+        onLimparPesquisa={() => lista.setTermo("")}
+        icone={Award}
+        tituloVazio="Nenhuma especialidade cadastrada ainda"
+        descricaoVazio='Use o botão "Cadastrar" para criar a primeira especialidade.'
+        rodape={<Paginacao {...lista} onPagina={lista.irPara} onPorPagina={lista.setPorPagina} rotuloItens="especialidades" />}
       >
-        <h2 className="font-display text-[1.1875rem] font-bold leading-[1.4] text-ink-900">{editandoId ? "Editar especialidade" : "Nova especialidade"}</h2>
+        {lista.itens.map((esp) => {
+          const uso = usoPorEspecialidade.get(esp.idEspecialidade) ?? 0;
+          return (
+            <LinhaAdmin
+              key={esp.idEspecialidade}
+              rotulo={esp.nomeEspecialidade}
+              titulo={esp.nomeEspecialidade}
+              meta={perfis ? <span className={uso > 0 ? cls.chip : cls.chipInativo}>{uso} perfil{uso === 1 ? "" : "s"}</span> : undefined}
+              onEditar={() => abrirEdicao(esp)}
+              onExcluir={() => excluir(esp)}
+            />
+          );
+        })}
+      </ListaAdmin>
 
-        {erro && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-red-600">{erro}</div>
-        )}
-
-        <div className="mt-4">
-          <input value={nome} maxLength={LIMITES.nomeEspecialidade} onChange={(e) => setNome(e.target.value)} placeholder="Nome da especialidade (ex: Backend, UX Design)" aria-label="Nome da especialidade (ex: Backend, UX Design)" className="w-full rounded-[0.625rem] border-[1.5px] border-ink-200 bg-ink-25 px-[0.9rem] py-[0.7rem] text-[0.9375rem] text-ink-900 outline-none transition-colors placeholder:text-ink-400 focus:border-brand-500 focus:bg-white focus:shadow-[0_0_0_3px_rgba(124,60,245,0.12)] disabled:bg-ink-50 disabled:text-ink-400 disabled:cursor-not-allowed" />
+      <ModalAdmin
+        aberto={modal.aberto}
+        titulo={modal.editando ? "Editar especialidade" : "Cadastrar especialidade"}
+        descricao={modal.editando ? `Alterando "${modal.registro?.nomeEspecialidade}".` : "Informe o nome da nova especialidade."}
+        onFechar={modal.fechar}
+        onSalvar={salvar}
+        salvando={modal.salvando}
+        rotuloSalvar={modal.editando ? "Salvar alterações" : "Cadastrar"}
+      >
+        <div className="space-y-4">
+          {modal.erro && <Alerta>{modal.erro}</Alerta>}
+          <CampoAdmin
+            id="esp-nome"
+            rotulo="Nome"
+            obrigatorio
+            contador={{ atual: nome.length, max: LIMITES.nomeEspecialidade }}
+            ajuda={modal.editando ? "O novo nome aparece em todos os perfis que usam esta especialidade." : undefined}
+          >
+            <input
+              id="esp-nome"
+              value={nome}
+              maxLength={LIMITES.nomeEspecialidade}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Ex.: Engenharia de Software"
+              className={cls.input}
+            />
+          </CampoAdmin>
         </div>
-
-        <div className="mt-5 flex gap-3">
-          <button type="submit" disabled={salvando} className="inline-flex items-center justify-center gap-[0.45rem] rounded-[0.625rem] px-[1.15rem] py-[0.625rem] text-sm font-semibold leading-none whitespace-nowrap transition-all cursor-pointer active:scale-[0.97] disabled:opacity-55 disabled:cursor-not-allowed bg-brand-600 text-white hover:bg-brand-700 hover:shadow-[0_2px_6px_-1px_rgba(107,33,224,0.35)]">
-            {salvando ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-            {editandoId ? "Salvar alterações" : "Adicionar especialidade"}
-          </button>
-          {editandoId && (
-            <button type="button" onClick={limparFormulario} className="inline-flex items-center justify-center gap-[0.45rem] rounded-[0.625rem] px-[1.15rem] py-[0.625rem] text-sm font-semibold leading-none whitespace-nowrap transition-all cursor-pointer active:scale-[0.97] disabled:opacity-55 disabled:cursor-not-allowed bg-ink-100 text-ink-900 hover:bg-ink-200">
-              Cancelar
-            </button>
-          )}
-        </div>
-      </form>
-
-      {erroCarregamento && !loading && <Alerta onTentarNovamente={carregar}>{erroCarregamento}</Alerta>}
-
-      <div className="rounded-2xl border border-ink-100 bg-white transition-[box-shadow,border-color,transform] duration-200 overflow-hidden">
-        {loading ? (
-          <div className="space-y-3 p-6">
-            <div className="relative overflow-hidden bg-ink-100 after:content-[''] after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/65 after:to-transparent after:animate-skeleton-sweep h-5 w-full rounded-lg" />
-            <div className="relative overflow-hidden bg-ink-100 after:content-[''] after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/65 after:to-transparent after:animate-skeleton-sweep h-5 w-4/5 rounded-lg" />
-          </div>
-        ) : erroCarregamento ? null : especialidades.length === 0 ? (
-          <EmptyState icon={Award} title="Nenhuma especialidade cadastrada ainda" />
-        ) : (
-          <ul className="divide-y divide-ink-100">
-            {especialidades.map((esp) => (
-              <li key={esp.idEspecialidade} className="flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-brand-50/60">
-                <h3 className="font-display text-[14.5px] font-semibold text-ink-900">{esp.nomeEspecialidade}</h3>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button type="button" onClick={() => editar(esp)} className="inline-flex items-center justify-center w-[2.35rem] h-[2.35rem] rounded-full text-ink-500 transition-colors hover:-translate-y-px active:scale-[0.92] disabled:opacity-55 disabled:cursor-not-allowed hover:bg-brand-50 hover:text-brand-700" title="Editar" aria-label={`Editar ${esp.nomeEspecialidade}`}>
-                    <Pencil size={16} />
-                  </button>
-                  <button type="button" onClick={() => excluir(esp.idEspecialidade)} className="inline-flex items-center justify-center w-[2.35rem] h-[2.35rem] rounded-full text-ink-500 transition-colors hover:-translate-y-px active:scale-[0.92] disabled:opacity-55 disabled:cursor-not-allowed hover:bg-[#FEF2F2] hover:text-[#DC2626]" title="Excluir" aria-label={`Excluir ${esp.nomeEspecialidade}`}>
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      </ModalAdmin>
     </>
   );
 }

@@ -17,6 +17,9 @@ import BarChart from "../../components/admin/BarChart";
 import InfoNote from "../../components/admin/InfoNote";
 import EmptyState from "../../components/EmptyState";
 import { Skeleton } from "../../components/Skeleton";
+import BarraPesquisaAdmin from "../../components/admin/BarraPesquisaAdmin";
+import Paginacao from "../../components/admin/Paginacao";
+import { useListagemAdmin } from "../../hook/useListagemAdmin";
 
 export default function AdminInteracoesPage() {
   const { pronto } = useRequireAdmin();
@@ -45,10 +48,13 @@ export default function AdminInteracoesPage() {
   const mapaProjetos = useMemo(() => new Map(projetos.map((p) => [p.idProjeto, p])), [projetos]);
 
 
-  const comentariosRecentes = useMemo(
-    () => [...listaComentarios].sort((a, b) => b.idComentario - a.idComentario).slice(0, 12),
-    [listaComentarios]
-  );
+  // Todos os comentários (mais recentes primeiro), com pesquisa e paginação no cliente.
+  const comentariosOrdenados = useMemo(() => [...listaComentarios].sort((a, b) => b.idComentario - a.idComentario), [listaComentarios]);
+  const listaPaginada = useListagemAdmin(comentariosOrdenados, (c) => [
+    c.textoComentario,
+    mapaUsuarios.get(c.usuarioId)?.nomeUsuario,
+    mapaPostagens.get(c.postagemId)?.tituloPostagem,
+  ]);
 
   const conexoesPorMes = useMemo(
     () => agruparPorMes(conexoes.itens, (v) => v.dataVinculo, 6),
@@ -191,11 +197,24 @@ export default function AdminInteracoesPage() {
             <Skeleton className="h-14 w-full rounded-lg" />
             <Skeleton className="h-14 w-full rounded-lg" />
           </div>
-        ) : comentariosRecentes.length === 0 ? (
+        ) : comentariosOrdenados.length === 0 ? (
           <EmptyState icon={MessageSquare} title="Nenhum comentário ainda" />
         ) : (
+          <>
+          <div className="mb-3">
+            <BarraPesquisaAdmin
+              valor={listaPaginada.termo}
+              onChange={listaPaginada.setTermo}
+              placeholder="Pesquisar por texto, autor ou publicação..."
+              rotulo="Pesquisar comentários"
+              resultado={`${listaPaginada.total} resultado${listaPaginada.total === 1 ? "" : "s"}`}
+            />
+          </div>
+          {listaPaginada.total === 0 ? (
+            <EmptyState icon={MessageSquare} title="Nenhum resultado encontrado" description={`Nada corresponde a "${listaPaginada.termo.trim()}".`} />
+          ) : (
           <ul className="divide-y divide-ink-100">
-            {comentariosRecentes.map((c) => (
+            {listaPaginada.itens.map((c) => (
               <li key={c.idComentario} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
                 <div className="min-w-0 flex-1">
                   <p className="text-[12.5px] font-semibold text-ink-800">
@@ -214,12 +233,18 @@ export default function AdminInteracoesPage() {
                   disabled={excluindoId === c.idComentario}
                   className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-[#FEF2F2] hover:text-[#DC2626] disabled:cursor-not-allowed disabled:opacity-55"
                   title="Excluir comentário"
+                  aria-label="Excluir comentário"
                 >
                   <Trash2 size={14} />
                 </button>
               </li>
             ))}
           </ul>
+          )}
+          <div className="-mx-4 -mb-4 mt-3 sm:-mx-5 sm:-mb-5">
+            <Paginacao {...listaPaginada} onPagina={listaPaginada.irPara} onPorPagina={listaPaginada.setPorPagina} rotuloItens="comentários" />
+          </div>
+          </>
         )}
       </SectionCard>
 

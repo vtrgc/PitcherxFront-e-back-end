@@ -2,15 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { FileText, Search, Trash2, ChevronDown, MessageSquare, ThumbsUp, ImageOff, ExternalLink, Images } from "lucide-react";
+import { FileText, Trash2, ChevronDown, MessageSquare, ThumbsUp, ImageOff, ExternalLink, Images } from "lucide-react";
 import GaleriaImagens from "../../components/GaleriaImagens";
 import { imagensDaGaleria } from "../../lib/galeria";
 
-import EmptyState from "../../components/EmptyState";
+import BarraPesquisaAdmin from "../../components/admin/BarraPesquisaAdmin";
+import CabecalhoAdmin from "../../components/admin/CabecalhoAdmin";
+import { ListaAdmin } from "../../components/admin/ListaAdmin";
+import Paginacao from "../../components/admin/Paginacao";
+import { useListagemAdmin } from "../../hook/useListagemAdmin";
 import { useRequireAdmin } from "../../hook/useRequireAdmin";
 import { mensagemErro } from "../../lib/api";
 import Avatar from "../../components/ui/Avatar";
-import Alerta from "../../components/ui/Alerta";
 import { useFeedback } from "../../components/ui/FeedbackProvider";
 import { buscarContagemCurtidas, TIPO_CONTEUDO } from "../../services/curtida.service";
 import { Post } from "../../types/Post";
@@ -29,7 +32,6 @@ export default function AdminPostagensPage() {
   const [loading, setLoading] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState("");
 
-  const [busca, setBusca] = useState("");
   const [processandoId, setProcessandoId] = useState<number | null>(null);
   const [expandidoId, setExpandidoId] = useState<number | null>(null);
   const [curtidas, setCurtidas] = useState<Record<number, number | "carregando" | "erro">>({});
@@ -71,20 +73,8 @@ export default function AdminPostagensPage() {
     return mapa;
   }, [comentarios]);
 
-  const filtrados = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return postagens
-      .filter((p) => {
-        if (!termo) return true;
-        const autor = mapaUsuarios.get(p.usuarioId)?.nomeUsuario ?? "";
-        return (
-          p.tituloPostagem.toLowerCase().includes(termo) ||
-          p.textoPostagem.toLowerCase().includes(termo) ||
-          autor.toLowerCase().includes(termo)
-        );
-      })
-      .sort((a, b) => b.idPostagem - a.idPostagem);
-  }, [postagens, busca, mapaUsuarios]);
+  const ordenadas = useMemo(() => [...postagens].sort((a, b) => b.idPostagem - a.idPostagem), [postagens]);
+  const lista = useListagemAdmin(ordenadas, (p) => [p.tituloPostagem, p.textoPostagem, p.dataPostagem, mapaUsuarios.get(p.usuarioId)?.nomeUsuario]);
 
   async function excluir(id: number, titulo: string) {
     if (!(await confirmar(`Excluir permanentemente a postagem "${titulo}"? Os comentários dela também serão removidos.`, { titulo: "Excluir postagem", perigo: true }))) return;
@@ -143,51 +133,35 @@ export default function AdminPostagensPage() {
 
   return (
     <>
-      <div className="rounded-2xl border border-ink-100 bg-white p-4 transition-[box-shadow,border-color,transform] duration-200 sm:p-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-            <FileText size={19} />
-          </div>
-          <div>
-            <h1 className="font-display text-[17px] font-bold text-ink-900">Postagens</h1>
-            <p className="mt-0.5 text-[0.8125rem] text-ink-500">
-              {postagens.length} postagem{postagens.length === 1 ? "" : "ns"} publicada{postagens.length === 1 ? "" : "s"} no total.
-              Visualização e moderação — a criação continua sendo feita pelos próprios usuários no Feed.
-            </p>
-          </div>
-        </div>
-      </div>
+      <CabecalhoAdmin
+        icone={FileText}
+        titulo="Postagens"
+        descricao="Visualização e moderação. Publicações são criadas e editadas pelos autores no Feed: a API não permite que a conta de administrador publique ou edite postagens."
+        total={loading ? null : postagens.length}
+        rotuloTotal={["postagem", "postagens"]}
+      />
 
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-ink-100 bg-white p-3 transition-[box-shadow,border-color,transform] duration-200">
-        <div className="flex h-11 min-w-[220px] flex-1 items-center gap-2.5 rounded-full border border-ink-200 bg-ink-25 px-4">
-          <Search size={17} className="shrink-0 text-brand-500" />
-          <input
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por título, texto ou autor"
-            className="w-full bg-transparent text-[14px] outline-none placeholder:text-ink-400"
-          />
-        </div>
-      </div>
+      <BarraPesquisaAdmin
+        valor={lista.termo}
+        onChange={lista.setTermo}
+        placeholder="Pesquisar por título, texto, data ou autor..."
+        rotulo="Pesquisar postagens"
+        resultado={`${lista.total} resultado${lista.total === 1 ? "" : "s"}`}
+      />
 
-      {erroCarregamento && !loading && (
-        <Alerta titulo="Erro ao carregar as postagens" onTentarNovamente={carregar}>
-          {erroCarregamento}
-        </Alerta>
-      )}
-
-      <div className="overflow-hidden rounded-2xl border border-ink-100 bg-white transition-[box-shadow,border-color,transform] duration-200">
-        {loading ? (
-          <div className="space-y-3 p-6">
-            <div className="relative h-16 w-full overflow-hidden rounded-lg bg-ink-100 after:absolute after:inset-0 after:animate-skeleton-sweep after:bg-gradient-to-r after:from-transparent after:via-white/65 after:to-transparent after:content-['']" />
-            <div className="relative h-16 w-full overflow-hidden rounded-lg bg-ink-100 after:absolute after:inset-0 after:animate-skeleton-sweep after:bg-gradient-to-r after:from-transparent after:via-white/65 after:to-transparent after:content-['']" />
-            <div className="relative h-16 w-full overflow-hidden rounded-lg bg-ink-100 after:absolute after:inset-0 after:animate-skeleton-sweep after:bg-gradient-to-r after:from-transparent after:via-white/65 after:to-transparent after:content-['']" />
-          </div>
-        ) : erroCarregamento ? null : filtrados.length === 0 ? (
-          <EmptyState icon={FileText} title="Nenhuma postagem encontrada" description="Ajuste a busca ou aguarde novas postagens serem publicadas." />
-        ) : (
-          <ul className="divide-y divide-ink-100">
-            {filtrados.map((p) => {
+      <ListaAdmin
+        carregando={loading}
+        erro={erroCarregamento}
+        onTentarNovamente={carregar}
+        vazio={postagens.length === 0}
+        semResultado={lista.total === 0}
+        termo={lista.termo}
+        onLimparPesquisa={() => lista.setTermo("")}
+        icone={FileText}
+        tituloVazio="Nenhuma postagem publicada ainda"
+        rodape={<Paginacao {...lista} onPagina={lista.irPara} onPorPagina={lista.setPorPagina} rotuloItens="postagens" />}
+      >
+            {lista.itens.map((p) => {
               const autor = mapaUsuarios.get(p.usuarioId);
               const comentariosPost = comentariosPorPostagem.get(p.idPostagem) ?? [];
               const curtidasPost = curtidas[p.idPostagem];
@@ -195,7 +169,7 @@ export default function AdminPostagensPage() {
 
               return (
                 <li key={p.idPostagem}>
-                  <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-4 transition-colors hover:bg-brand-50/50 sm:px-6">
                     <div className="flex min-w-0 items-start gap-3">
                       <Avatar url={autor?.urlImagemUsuario} nome={autor?.nomeUsuario ?? "Usuário"} tamanho={34} />
                       <div className="min-w-0">
@@ -312,9 +286,7 @@ export default function AdminPostagensPage() {
                 </li>
               );
             })}
-          </ul>
-        )}
-      </div>
+      </ListaAdmin>
     </>
   );
 }

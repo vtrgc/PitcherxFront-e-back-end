@@ -18,6 +18,7 @@ export default function AdminTermosVinculoPage() {
       titulo="Termos de vínculo"
       descricao="Condições exibidas ao vincular pessoas a projetos."
       icone={Link2}
+      nomeItem="termo de vínculo"
       listar={listarTermos}
       criar={criarTermo}
       atualizar={atualizarTermo}

@@ -45,6 +45,23 @@
 - Campos financeiros no formulário de projeto
 - Resumo financeiro nos cartões de projeto
 
+## Páginas administrativas (Grupo 10 — melhorias no admin)
+
+- Botão "+ Cadastrar" com modal em todas as páginas de cadastro do admin
+- Botão "Editar" com modal preenchida em cada registro
+- Campo "Pesquisar..." em todas as páginas administrativas
+- Paginação (anterior/próxima, número da página, itens por página)
+- Mensagem "Nenhum resultado encontrado" com "Limpar pesquisa"
+- Filtro por área (Subáreas)
+- Filtro por estado (Endereços)
+- Filtro por contrato (Termos de contrato)
+- Contagem de uso por registro (subáreas, perfis, projetos)
+- Busca de CEP no cadastro de endereço do admin
+- Cadastro de usuário pelo admin
+- Edição de status e perfis do usuário em modal
+- Pesquisa e paginação de todos os comentários (Interações)
+- Padrão visual único das páginas administrativas
+
 ## Arquivos novos
 
 - `app/lib/cep.ts`
@@ -65,4 +82,13 @@
 - `app/publicacao/[id]/page.tsx`
 - `tests/cep.test.ts`
 - `tests/grupo10.test.ts`
+- `tests/listagem.test.ts`
+- `app/lib/listagem.ts`
+- `app/hook/useListagemAdmin.ts`
+- `app/hook/useModalCadastro.ts`
+- `app/components/admin/CabecalhoAdmin.tsx`
+- `app/components/admin/BarraPesquisaAdmin.tsx`
+- `app/components/admin/ListaAdmin.tsx`
+- `app/components/admin/ModalAdmin.tsx`
+- `app/components/admin/Paginacao.tsx`
 - `RELATORIO_GRUPO10.md`

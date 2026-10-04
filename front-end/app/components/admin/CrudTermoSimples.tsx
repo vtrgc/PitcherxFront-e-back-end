@@ -1,15 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Pencil, Plus, Save, Trash2, X, type LucideIcon } from "lucide-react";
+import { type LucideIcon } from "lucide-react";
 
-import EmptyState from "../EmptyState";
+import BarraPesquisaAdmin from "./BarraPesquisaAdmin";
+import CabecalhoAdmin from "./CabecalhoAdmin";
+import { CampoAdmin, LinhaAdmin, ListaAdmin } from "./ListaAdmin";
+import ModalAdmin from "./ModalAdmin";
+import Paginacao from "./Paginacao";
 import Alerta from "../ui/Alerta";
 import { cls } from "../ui/estilos";
 import { useFeedback } from "../ui/FeedbackProvider";
 import { useAuth } from "../../context/AuthContext";
+import { useListagemAdmin } from "../../hook/useListagemAdmin";
+import { useModalCadastro } from "../../hook/useModalCadastro";
 import { useRequireAdmin } from "../../hook/useRequireAdmin";
 import { mensagemErro } from "../../lib/api";
+import { mesmoNome } from "../../lib/limites";
 
 export interface TermoSimples {
   id: number;
@@ -21,41 +28,45 @@ interface Props {
   titulo: string;
   descricao: string;
   icone: LucideIcon;
+  /** Nome no singular para títulos e mensagens (ex.: "termo de postagem"). */
+  nomeItem?: string;
   listar: () => Promise<TermoSimples[]>;
   criar: (dados: { titulo: string; descricao: string }) => Promise<unknown>;
   atualizar: (id: number, dados: { titulo: string; descricao: string }) => Promise<unknown>;
   excluir: (id: number) => Promise<unknown>;
 }
 
+const TITULO_MAX = 255;
+const DESCRICAO_MAX = 2000;
+
 /**
  * Cadastro de termos com título e descrição (termos de postagem e de vínculo).
  *
  * Regra do backend: GET e DELETE para ADMIN; POST/PUT somente para as roles USUARIO/EMPRESA.
  * Um administrador que também tenha uma dessas roles (Admin → Usuários → adicionar perfil,
- * seguido de novo login) pode cadastrar e editar — a tela libera o formulário conforme as
- * roles presentes no token da sessão.
+ * seguido de novo login) pode cadastrar e editar — "Cadastrar" e "Editar" ficam disponíveis
+ * conforme as roles presentes na sessão. O título é VARCHAR(255) UNIQUE no banco.
  */
-export default function CrudTermoSimples({ titulo, descricao, icone: Icone, listar, criar, atualizar, excluir }: Props) {
+export default function CrudTermoSimples({ titulo, descricao, icone: Icone, nomeItem = "termo", listar, criar, atualizar, excluir }: Props) {
   const { pronto } = useRequireAdmin();
   const { usuario } = useAuth();
   const { notificar, confirmar } = useFeedback();
   const podeEscrever = !!usuario?.roles.some((r) => r === "USUARIO" || r === "EMPRESA");
+  const dicaSemPermissao = "O servidor só aceita cadastro/edição de contas com perfil Usuário ou Empresa";
 
   const [termos, setTermos] = useState<TermoSimples[]>([]);
   const [loading, setLoading] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState("");
-  const [editandoId, setEditandoId] = useState<number | null>(null);
-  const [mostrarForm, setMostrarForm] = useState(false);
+
+  const modal = useModalCadastro<TermoSimples>();
   const [campoTitulo, setCampoTitulo] = useState("");
   const [campoDescricao, setCampoDescricao] = useState("");
-  const [erroForm, setErroForm] = useState("");
-  const [salvando, setSalvando] = useState(false);
 
   const carregar = useCallback(async () => {
     setLoading(true);
     setErroCarregamento("");
     try {
-      setTermos((await listar()) ?? []);
+      setTermos([...((await listar()) ?? [])].sort((a, b) => b.id - a.id));
     } catch (error) {
       setErroCarregamento(mensagemErro(error, "Não foi possível carregar os termos."));
     } finally {
@@ -67,39 +78,38 @@ export default function CrudTermoSimples({ titulo, descricao, icone: Icone, list
     if (pronto) carregar();
   }, [pronto, carregar]);
 
-  function abrir(termo?: TermoSimples) {
-    setEditandoId(termo?.id ?? null);
-    setCampoTitulo(termo?.titulo ?? "");
-    setCampoDescricao(termo?.descricao ?? "");
-    setErroForm("");
-    setMostrarForm(true);
+  const lista = useListagemAdmin(termos, (t) => [t.titulo, t.descricao]);
+
+  function abrirNovo() {
+    setCampoTitulo("");
+    setCampoDescricao("");
+    modal.abrirNovo();
   }
 
-  function fechar() {
-    setMostrarForm(false);
-    setEditandoId(null);
-    setErroForm("");
+  function abrirEdicao(t: TermoSimples) {
+    setCampoTitulo(t.titulo);
+    setCampoDescricao(t.descricao);
+    modal.abrirEdicao(t);
   }
 
-  async function salvar() {
-    if (!campoTitulo.trim() || !campoDescricao.trim()) {
-      setErroForm("Preencha o título e a descrição.");
-      return;
-    }
-    setSalvando(true);
-    setErroForm("");
-    try {
-      const dados = { titulo: campoTitulo.trim(), descricao: campoDescricao.trim() };
-      if (editandoId) await atualizar(editandoId, dados);
-      else await criar(dados);
-      notificar(editandoId ? "Termo atualizado." : "Termo criado.", "sucesso");
-      fechar();
-      await carregar();
-    } catch (error) {
-      setErroForm(mensagemErro(error, "Não foi possível salvar o termo."));
-    } finally {
-      setSalvando(false);
-    }
+  function salvar() {
+    const idAtual = modal.registro?.id ?? null;
+    modal.salvar({
+      validar: () => {
+        const t = campoTitulo.trim();
+        if (!t || !campoDescricao.trim()) return "Preencha o título e a descrição.";
+        if (t.length > TITULO_MAX) return `O título pode ter no máximo ${TITULO_MAX} caracteres.`;
+        if (termos.some((x) => x.id !== idAtual && mesmoNome(x.titulo, t))) return "Já existe um termo com esse título.";
+        return null;
+      },
+      enviar: () => {
+        const dados = { titulo: campoTitulo.trim(), descricao: campoDescricao.trim() };
+        return idAtual ? atualizar(idAtual, dados) : criar(dados);
+      },
+      sucesso: idAtual ? "Termo atualizado." : "Termo cadastrado.",
+      falha: "Não foi possível salvar o termo. Verifique se o título já não está em uso.",
+      depois: carregar,
+    });
   }
 
   async function remover(termo: TermoSimples) {
@@ -119,104 +129,84 @@ export default function CrudTermoSimples({ titulo, descricao, icone: Icone, list
 
   return (
     <>
-      <div className={`${cls.card} flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5`}>
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-            <Icone size={19} aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="font-display text-[17px] font-bold text-ink-900">{titulo}</h1>
-            <p className="text-[0.8125rem] text-ink-500 mt-0.5">{descricao}</p>
-          </div>
-        </div>
-        {podeEscrever && !mostrarForm && (
-          <button type="button" onClick={() => abrir()} className={`${cls.btnPrimario} !text-[13px]`}>
-            <Plus size={15} aria-hidden="true" /> Novo termo
-          </button>
-        )}
-      </div>
+      <CabecalhoAdmin
+        icone={Icone}
+        titulo={titulo}
+        descricao={descricao}
+        total={loading ? null : termos.length}
+        rotuloTotal={["termo", "termos"]}
+        onCadastrar={abrirNovo}
+        cadastrarDesabilitado={!podeEscrever}
+        dicaCadastrar={podeEscrever ? undefined : dicaSemPermissao}
+      />
 
       {!podeEscrever && (
         <Alerta variante="info">
           O servidor só permite cadastrar e editar estes termos a contas com o perfil Usuário ou Empresa. Para cadastrar, adicione um desses
-          perfis à sua conta em Admin → Usuários e entre novamente. Como administrador, você pode consultar e excluir.
+          perfis à sua conta em Admin → Usuários e entre novamente. Como administrador, você pode pesquisar, consultar e excluir.
         </Alerta>
       )}
 
-      {mostrarForm && podeEscrever && (
-        <form
-          noValidate
-          className={`${cls.card} space-y-4 p-4 sm:p-5`}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!salvando) salvar();
-          }}
-        >
-          <h2 className={cls.h2}>{editandoId ? "Editar termo" : "Novo termo"}</h2>
-          {erroForm && <Alerta>{erroForm}</Alerta>}
-          <div>
-            <label htmlFor="termo-titulo" className={cls.label}>
-              Título
-            </label>
-            <input id="termo-titulo" value={campoTitulo} maxLength={255} onChange={(e) => setCampoTitulo(e.target.value)} className={cls.input} />
-          </div>
-          <div>
-            <label htmlFor="termo-descricao" className={cls.label}>
-              Descrição
-            </label>
+      <BarraPesquisaAdmin
+        valor={lista.termo}
+        onChange={lista.setTermo}
+        placeholder="Pesquisar por título ou descrição..."
+        rotulo={`Pesquisar ${titulo.toLowerCase()}`}
+        resultado={`${lista.total} resultado${lista.total === 1 ? "" : "s"}`}
+      />
+
+      <ListaAdmin
+        carregando={loading}
+        erro={erroCarregamento}
+        onTentarNovamente={carregar}
+        vazio={termos.length === 0}
+        semResultado={lista.total === 0}
+        termo={lista.termo}
+        onLimparPesquisa={() => lista.setTermo("")}
+        icone={Icone}
+        tituloVazio="Nenhum termo cadastrado ainda"
+        rodape={<Paginacao {...lista} onPagina={lista.irPara} onPorPagina={lista.setPorPagina} rotuloItens="termos" />}
+      >
+        {lista.itens.map((termo) => (
+          <LinhaAdmin
+            key={termo.id}
+            rotulo={termo.titulo}
+            titulo={termo.titulo}
+            subtitulo={<span className="whitespace-pre-line">{termo.descricao}</span>}
+            onEditar={() => abrirEdicao(termo)}
+            editarDesabilitado={!podeEscrever}
+            dicaEditar={podeEscrever ? undefined : dicaSemPermissao}
+            onExcluir={() => remover(termo)}
+          />
+        ))}
+      </ListaAdmin>
+
+      <ModalAdmin
+        aberto={modal.aberto}
+        titulo={modal.editando ? `Editar ${nomeItem}` : `Cadastrar ${nomeItem}`}
+        descricao={modal.editando ? `Alterando "${modal.registro?.titulo}".` : "Preencha o título e o texto do termo."}
+        onFechar={modal.fechar}
+        onSalvar={salvar}
+        salvando={modal.salvando}
+        rotuloSalvar={modal.editando ? "Salvar alterações" : "Cadastrar"}
+      >
+        <div className="space-y-4">
+          {modal.erro && <Alerta>{modal.erro}</Alerta>}
+          <CampoAdmin id="termo-simples-titulo" rotulo="Título" obrigatorio contador={{ atual: campoTitulo.length, max: TITULO_MAX }}>
+            <input id="termo-simples-titulo" value={campoTitulo} maxLength={TITULO_MAX} onChange={(e) => setCampoTitulo(e.target.value)} className={cls.input} />
+          </CampoAdmin>
+          <CampoAdmin id="termo-simples-descricao" rotulo="Descrição" obrigatorio contador={{ atual: campoDescricao.length, max: DESCRICAO_MAX }}>
             <textarea
-              id="termo-descricao"
+              id="termo-simples-descricao"
               value={campoDescricao}
-              maxLength={2000}
-              rows={4}
+              maxLength={DESCRICAO_MAX}
+              rows={5}
               onChange={(e) => setCampoDescricao(e.target.value)}
               className={`${cls.input} resize-y`}
             />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" disabled={salvando} className={cls.btnPrimario}>
-              {salvando ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Salvar
-            </button>
-            <button type="button" onClick={fechar} disabled={salvando} className={cls.btnSecundario}>
-              <X size={15} /> Cancelar
-            </button>
-          </div>
-        </form>
-      )}
-
-      {erroCarregamento && !loading && <Alerta onTentarNovamente={carregar}>{erroCarregamento}</Alerta>}
-
-      <div className={`${cls.card} overflow-hidden`}>
-        {loading ? (
-          <div className="space-y-3 p-6" aria-label="Carregando">
-            <div className={`${cls.skeleton} h-5 w-full rounded-lg`} />
-            <div className={`${cls.skeleton} h-5 w-4/5 rounded-lg`} />
-          </div>
-        ) : erroCarregamento ? null : termos.length === 0 ? (
-          <EmptyState icon={Icone} title="Nenhum termo cadastrado ainda" />
-        ) : (
-          <ul className="divide-y divide-ink-100">
-            {termos.map((termo) => (
-              <li key={termo.id} className="flex items-start justify-between gap-4 px-4 py-4 transition-colors hover:bg-brand-50/60 sm:px-6">
-                <div className="min-w-0">
-                  <h3 className="font-display text-[14.5px] font-semibold text-ink-900 break-words">{termo.titulo}</h3>
-                  <p className="text-[0.8125rem] text-ink-500 mt-0.5 whitespace-pre-line break-words">{termo.descricao}</p>
-                </div>
-                <div className="flex shrink-0 items-center">
-                  {podeEscrever && (
-                    <button type="button" onClick={() => abrir(termo)} className={cls.btnIcone} aria-label={`Editar ${termo.titulo}`}>
-                      <Pencil size={16} />
-                    </button>
-                  )}
-                  <button type="button" onClick={() => remover(termo)} className={cls.btnIconePerigo} aria-label={`Excluir ${termo.titulo}`}>
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+          </CampoAdmin>
+        </div>
+      </ModalAdmin>
     </>
   );
 }
