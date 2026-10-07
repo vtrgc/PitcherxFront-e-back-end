@@ -15,7 +15,7 @@ import AuthAlert from "../../components/auth/AuthAlert";
 
 export default function Cadastro() {
   const router = useRouter();
-  const { login, isAuthenticated, isAdmin, isLoading } = useAuth();
+  const { login, usuario: usuarioLogado, isAuthenticated, isAdmin, isLoading } = useAuth();
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -28,9 +28,10 @@ export default function Cadastro() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && !loading) {
-      router.replace(isAdmin ? "/admin" : "/feed");
+      if (usuarioLogado && !usuarioLogado.isActive) router.replace("/auth/verificar-conta");
+      else router.replace(isAdmin ? "/admin" : "/feed");
     }
-  }, [isLoading, isAuthenticated, isAdmin, router, loading]);
+  }, [isLoading, isAuthenticated, isAdmin, router, loading, usuarioLogado]);
 
   async function handleCriarConta() {
     const validacao = validarCadastro({ nome, email, senha, confirmarSenha, telefone });
@@ -61,12 +62,13 @@ export default function Cadastro() {
     }
 
     try {
-      await login({ emailUsuario: email.trim().toLowerCase(), senhaUsuario: senha });
-      // Próximo passo do fluxo: completar o perfil (LinkedIn, CPF/CNPJ, especialidade).
-      router.replace("/auth/completar-cadastro");
+      const novo = await login({ emailUsuario: email.trim().toLowerCase(), senhaUsuario: senha });
+      // O backend cria a conta inativa e envia um código por e-mail: primeiro a verificação,
+      // depois completar o perfil (LinkedIn, CPF/CNPJ, especialidade).
+      router.replace(novo.isActive ? "/auth/completar-cadastro" : "/auth/verificar-conta?novo=1");
     } catch {
       // A conta foi criada; só o login automático falhou.
-      router.replace("/auth/login");
+      router.replace("/auth/login?cadastro=1");
     }
   }
 

@@ -3,8 +3,10 @@
  *
  * O que o backend tem hoje:
  *  - `Usuario.active` (conta ativa/desativada) e `roles` (USUARIO, EMPRESA, ADMIN);
- *  - `Usuario.emailUsuario` — mas NÃO existe confirmação de e-mail (nenhum campo, endpoint
- *    ou envio de código de confirmação; o e-mail de boas-vindas está desativado no servidor);
+ *  - `Usuario.emailUsuario`, confirmado pelo código de 6 dígitos enviado no cadastro
+ *    (POST /usuario/verificar-conta). A API não devolve o campo `verificado`, mas a conta só
+ *    fica ativa depois da verificação (e a migration V25 marcou as contas ativas como
+ *    verificadas): conta ativa = e-mail confirmado;
  *  - `PerfilUsuario.identificador` (CPF/CNPJ) — sem conferência em órgão oficial; o front
  *    só consegue checar os dígitos verificadores.
  * Por isso nenhum item aparece como "Em análise": não há processo de análise no sistema.
@@ -50,10 +52,13 @@ export function itensVerificacao(dados: {
   itens.push({
     chave: "email",
     titulo: "E-mail",
-    status: "nao_verificado",
-    detalhe: dados.email
-      ? `${dados.email} — cadastrado, mas a plataforma ainda não oferece confirmação de e-mail.`
-      : "Nenhum e-mail informado.",
+    status: !dados.email ? "nao_verificado" : dados.ativo === false ? "pendente" : "verificado",
+    detalhe: !dados.email
+      ? "Nenhum e-mail informado."
+      : dados.ativo === false
+        ? `${dados.email} — aguardando o código de verificação enviado no cadastro.`
+        : `${dados.email} — confirmado pelo código enviado no cadastro.`,
+    acao: dados.email && dados.ativo === false ? { href: "/auth/verificar-conta", rotulo: "Verificar e-mail" } : undefined,
   });
 
   if (!dados.perfilIndisponivel) {

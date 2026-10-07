@@ -6,6 +6,8 @@ import Link from "next/link";
 import { FileSignature, Plus, Pencil, Trash2, Briefcase, ChevronRight } from "lucide-react";
 
 import PageShell from "../components/PageShell";
+import Paginacao from "../components/ui/Paginacao";
+import { usePaginacao } from "../hook/usePaginacao";
 import EmptyState from "../components/EmptyState";
 import FormContrato from "../components/FormContrato";
 import SearchBar from "../components/SearchBar";
@@ -123,6 +125,7 @@ function ContratosPageContent() {
       `${c.tituloContrato} ${c.descricaoContrato} ${projetoMap.get(c.projetoId) ?? ""}`.toLowerCase().includes(termo)
     );
   }, [contratos, busca, projetoMap]);
+  const paginacao = usePaginacao(visiveis, { tamanhoInicial: 10, chaveReinicio: busca });
 
   async function salvar(dados: ContratoRequest) {
     if (editando) {
@@ -243,8 +246,9 @@ function ContratosPageContent() {
           />
         </div>
       ) : (
+        <>
         <div className="grid gap-5 md:grid-cols-2">
-          {visiveis.map((contrato) => {
+          {paginacao.itens.map((contrato) => {
             const gerenciavel = podeGerenciar(contrato.projetoId);
             return (
               <article key={contrato.idContrato} className={`${cls.card} flex flex-col p-5`}>
@@ -303,6 +307,23 @@ function ContratosPageContent() {
             );
           })}
         </div>
+        <div className={`${cls.card} overflow-hidden`}>
+          <Paginacao
+            pagina={paginacao.pagina}
+            totalPaginas={paginacao.totalPaginas}
+            total={paginacao.total}
+            inicio={paginacao.inicio}
+            fim={paginacao.fim}
+            tamanho={paginacao.tamanho}
+            onPagina={(p) => {
+              paginacao.irPara(p);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            onTamanho={paginacao.setTamanho}
+            rotulo="contratos"
+          />
+        </div>
+        </>
       )}
     </PageShell>
   );

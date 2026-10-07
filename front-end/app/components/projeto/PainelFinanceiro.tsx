@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleDollarSign, PieChart, Target, TrendingUp, Wallet } from "lucide-react";
+import { AlertTriangle, CircleDollarSign, PieChart, Target, TrendingUp, Wallet } from "lucide-react";
 import { FichaProjeto, resumoFinanceiro } from "../../lib/fichaProjeto";
 import { formatarPercentual } from "../../lib/perfil";
 import { cls } from "../ui/estilos";
@@ -38,7 +38,7 @@ export default function PainelFinanceiro({
           <>
             <dl className="mt-4 grid grid-cols-1 gap-3 min-[460px]:grid-cols-3">
               <Valor icone={Target} rotulo="Meta" valor={r.meta !== null ? moeda(r.meta) : "Não informada"} destaque />
-              <Valor icone={Wallet} rotulo="Captado" valor={r.captado !== null ? moeda(r.captado) : "Não informado"} />
+              <Valor icone={Wallet} rotulo="Arrecadado" valor={r.captado !== null ? moeda(r.captado) : "Não informado"} />
               <Valor icone={TrendingUp} rotulo="Restante" valor={r.restante !== null ? moeda(r.restante) : "—"} />
             </dl>
 
@@ -70,7 +70,7 @@ export default function PainelFinanceiro({
               </div>
             ) : (
               <p className="mt-4 text-[12.5px] text-ink-500">
-                {r.meta !== null ? "O valor já captado não foi informado, por isso o progresso não é exibido." : "Sem meta informada, não há progresso para calcular."}
+                {r.meta !== null ? "O valor arrecadado não foi informado, por isso o progresso não é exibido." : "Sem meta informada, não há progresso para calcular."}
               </p>
             )}
 
@@ -83,6 +83,16 @@ export default function PainelFinanceiro({
           </>
         ) : (
           <SemDados texto="O criador ainda não informou a meta financeira deste projeto." podeEditar={podeEditar} onEditar={onEditar} />
+        )}
+
+        {ficha?.risco && (
+          <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+            <div className="min-w-0">
+              <h3 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-amber-700">Risco do projeto</h3>
+              <p className="mt-0.5 whitespace-pre-line break-words text-[14px] leading-6 text-ink-800">{ficha.risco}</p>
+            </div>
+          </div>
         )}
 
         {ficha?.usoRecursos && (

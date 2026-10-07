@@ -5,6 +5,8 @@ import Link from "next/link";
 import { HandCoins, Plus, Pencil, Trash2, ChevronRight } from "lucide-react";
 
 import PageShell from "../components/PageShell";
+import Paginacao from "../components/ui/Paginacao";
+import { usePaginacao } from "../hook/usePaginacao";
 import EmptyState from "../components/EmptyState";
 import FormValorDescricao from "../components/FormValorDescricao";
 import SearchBar from "../components/SearchBar";
@@ -54,6 +56,7 @@ export default function PropostasPage() {
     const termo = busca.trim().toLowerCase();
     return termo ? propostas.filter((p) => p.descricaoProposta.toLowerCase().includes(termo)) : propostas;
   }, [propostas, busca]);
+  const paginacao = usePaginacao(visiveis, { tamanhoInicial: 10, chaveReinicio: busca });
 
   async function salvar(descricao: string, valor: number | null) {
     const payload = { descricaoProposta: descricao, valorProposta: valor };
@@ -145,8 +148,9 @@ export default function PropostasPage() {
           />
         </div>
       ) : (
+        <>
         <ul>
-          {visiveis.map((proposta) => (
+          {paginacao.itens.map((proposta) => (
             <li key={proposta.idProposta} className={`${cls.linha} flex items-start justify-between gap-3`}>
               <Link href={`/propostas/${proposta.idProposta}`} className="group min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
@@ -185,6 +189,23 @@ export default function PropostasPage() {
             </li>
           ))}
         </ul>
+        <div className={`${cls.card} overflow-hidden`}>
+          <Paginacao
+            pagina={paginacao.pagina}
+            totalPaginas={paginacao.totalPaginas}
+            total={paginacao.total}
+            inicio={paginacao.inicio}
+            fim={paginacao.fim}
+            tamanho={paginacao.tamanho}
+            onPagina={(p) => {
+              paginacao.irPara(p);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            onTamanho={paginacao.setTamanho}
+            rotulo="propostas"
+          />
+        </div>
+        </>
       )}
     </PageShell>
   );

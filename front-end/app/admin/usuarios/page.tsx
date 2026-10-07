@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Search, Power, Trash2, ShieldCheck, UserPlus, Loader2, ExternalLink, X } from "lucide-react";
 
 import EmptyState from "../../components/EmptyState";
+import Paginacao from "../../components/ui/Paginacao";
+import { usePaginacao } from "../../hook/usePaginacao";
 import Alerta from "../../components/ui/Alerta";
 import Avatar from "../../components/ui/Avatar";
 import { cls } from "../../components/ui/estilos";
@@ -121,6 +123,7 @@ export default function AdminUsuariosPage() {
         (!filtroRole || (u.roles ?? []).includes(filtroRole))
     );
   }, [usuarios, busca, filtroStatus, filtroRole]);
+  const paginacao = usePaginacao(filtrados, { chaveReinicio: `${busca}|${filtroStatus}|${filtroRole}` });
 
   if (!pronto) {
     return <div className={`${cls.skeleton} h-24 w-full rounded-2xl`} />;
@@ -139,7 +142,8 @@ export default function AdminUsuariosPage() {
             <h1 className="font-display text-[17px] font-bold text-ink-900">Usuários</h1>
             <p className="text-[0.8125rem] text-ink-500 mt-0.5">
               {usuarios.length} usuário{usuarios.length === 1 ? "" : "s"} cadastrado{usuarios.length === 1 ? "" : "s"}. Nome,
-              e-mail e telefone são editados pelo próprio usuário; aqui o administrador gerencia status e perfis.
+              e-mail e telefone são editados pelo próprio usuário; aqui o administrador gerencia status e perfis. Contas novas ficam
+              inativas até o usuário confirmar o código enviado por e-mail.
             </p>
           </div>
         </div>
@@ -243,8 +247,9 @@ export default function AdminUsuariosPage() {
         ) : erroCarregamento ? null : filtrados.length === 0 ? (
           <EmptyState icon={ShieldCheck} title="Nenhum usuário encontrado" />
         ) : (
+          <>
           <ul className="divide-y divide-ink-100">
-            {filtrados.map((u) => {
+            {paginacao.itens.map((u) => {
               const ehVoce = u.idUsuario === admin?.idUsuario;
               const ocupado = processandoId === u.idUsuario;
               return (
@@ -261,7 +266,12 @@ export default function AdminUsuariosPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-                    <span className={u.active ? cls.chipAtivo : cls.chipInativo}>{u.active ? "Ativo" : "Inativo"}</span>
+                    <span
+                      className={u.active ? cls.chipAtivo : cls.chipInativo}
+                      title={u.active ? "Conta ativa" : "Conta desativada ou aguardando a verificação do e-mail (código enviado no cadastro)"}
+                    >
+                      {u.active ? "Ativo" : "Inativo"}
+                    </span>
                     <span className={cls.chip} title={(u.roles ?? []).join(", ")}>
                       {ROLE_LABEL[obterRolePrincipal(u.roles)] ?? obterRolePrincipal(u.roles)}
                       {(u.roles ?? []).length > 1 && ` +${u.roles.length - 1}`}
@@ -308,6 +318,18 @@ export default function AdminUsuariosPage() {
               );
             })}
           </ul>
+          <Paginacao
+            pagina={paginacao.pagina}
+            totalPaginas={paginacao.totalPaginas}
+            total={paginacao.total}
+            inicio={paginacao.inicio}
+            fim={paginacao.fim}
+            tamanho={paginacao.tamanho}
+            onPagina={paginacao.irPara}
+            onTamanho={paginacao.setTamanho}
+            rotulo="usuários"
+          />
+          </>
         )}
       </div>
     </>

@@ -7,7 +7,16 @@ import { apiDateToInput, hojeServidorInput, inputDateToApi, validarDatasProjeto 
 import { LIMITES } from "../lib/limites";
 import { isValidImageUrl } from "../lib/image";
 import { mensagemErro } from "../lib/api";
-import { CamposFicha, ErrosFicha, USO_RECURSOS_MAX, camposDaFicha, montarDescricaoProjeto, validarCamposFicha } from "../lib/fichaProjeto";
+import {
+  CamposFicha,
+  ErrosFicha,
+  RISCO_MAX,
+  USO_RECURSOS_MAX,
+  camposDaFicha,
+  camposFinanceirosApi,
+  montarDescricaoProjeto,
+  validarCamposFicha,
+} from "../lib/fichaProjeto";
 import { Projeto, ProjetoRequest } from "../types/Projeto";
 import { TipoProjeto } from "../types/TipoProjeto";
 import { cls } from "./ui/estilos";
@@ -18,9 +27,9 @@ import SeletorImagens from "./SeletorImagens";
  * Formulário de projeto (criação e edição). Replica as validações do ProjetoRequestDTO:
  * nome/descrição obrigatórios, início hoje ou futuro, término futuro e tipo obrigatório.
  *
- * Dados financeiros (meta, captado, participação, investimento mínimo e uso dos recursos)
- * são opcionais. O backend não tem esses campos: eles são guardados no fim da descrição
- * (ver lib/fichaProjeto) e nunca aparecem no texto exibido.
+ * Dados financeiros: `metaFinanceira` (obrigatória), `valorArrecadado` e `riscoProjeto` são
+ * campos do DTO. Participação, investimento mínimo e uso dos recursos são opcionais e, por não
+ * terem coluna no backend, ficam no fim da descrição (ver lib/fichaProjeto) sem aparecer no texto.
  *
  * Imagens: na criação, o usuário pode escolher arquivos (enviados depois por
  * PUT /projeto/{id}/imagens) ou informar uma URL. Na edição, a galeria é gerenciada na
@@ -79,6 +88,8 @@ export default function FormProjeto({
     }
 
     const financeiro = validarCamposFicha(ficha);
+    // metaFinanceira é @NotNull no ProjetoRequestDTO.
+    if (!financeiro.erros.meta && !financeiro.ficha?.meta) financeiro.erros.meta = "Informe a meta financeira do projeto.";
     setErrosFicha(financeiro.erros);
     if (Object.keys(financeiro.erros).length > 0) {
       setErro("Revise os dados financeiros destacados.");
@@ -95,6 +106,7 @@ export default function FormProjeto({
         dataFimProjeto: inputDateToApi(dataFim),
         tipoProjetoId: Number(tipoProjetoId),
         urlImagemProjeto: edicao ? undefined : urlImagem.trim() || undefined,
+        ...camposFinanceirosApi(financeiro.ficha),
       }, edicao ? [] : arquivos);
     } catch (error) {
       setErro(mensagemErro(error, "Não foi possível salvar o projeto."));
@@ -202,15 +214,29 @@ export default function FormProjeto({
 
         <fieldset className="md:col-span-2 rounded-xl border border-ink-100 p-4" disabled={salvando}>
           <legend className="flex items-center gap-1.5 px-1 text-[13px] font-semibold text-ink-800">
-            <CircleDollarSign size={15} aria-hidden="true" /> Dados financeiros <span className="font-normal text-ink-400">(opcional)</span>
+            <CircleDollarSign size={15} aria-hidden="true" /> Dados financeiros
           </legend>
           <p className="mb-3 text-[12.5px] text-ink-500">
-            Aparecem na página do projeto (meta, progresso da captação e participação oferecida). Deixe em branco o que não quiser
-            divulgar.
+            Aparecem na página do projeto (meta, progresso da captação, risco e participação oferecida). A meta é obrigatória; deixe
+            em branco o restante que não quiser divulgar.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
-            <CampoFicha id="meta" rotulo="Meta de captação (R$)" placeholder="Ex.: 100.000,00" valor={ficha.meta} erro={errosFicha.meta} onChange={(v) => setFicha((f) => ({ ...f, meta: v }))} />
-            <CampoFicha id="captado" rotulo="Valor já captado (R$)" placeholder="Ex.: 65.000,00" valor={ficha.captado} erro={errosFicha.captado} onChange={(v) => setFicha((f) => ({ ...f, captado: v }))} />
+            <CampoFicha
+              id="meta"
+              rotulo="Meta financeira (R$) *"
+              placeholder="Ex.: 100.000,00"
+              valor={ficha.meta}
+              erro={errosFicha.meta}
+              onChange={(v) => setFicha((f) => ({ ...f, meta: v }))}
+            />
+            <CampoFicha
+              id="captado"
+              rotulo="Valor arrecadado (R$)"
+              placeholder="Ex.: 65.000,00"
+              valor={ficha.captado}
+              erro={errosFicha.captado}
+              onChange={(v) => setFicha((f) => ({ ...f, captado: v }))}
+            />
             <CampoFicha
               id="participacao"
               rotulo="Participação oferecida (%)"
@@ -227,6 +253,21 @@ export default function FormProjeto({
               erro={errosFicha.investimentoMinimo}
               onChange={(v) => setFicha((f) => ({ ...f, investimentoMinimo: v }))}
             />
+            <div className="sm:col-span-2">
+              <label htmlFor="proj-ficha-risco" className={cls.label}>
+                Risco do projeto
+              </label>
+              <input
+                id="proj-ficha-risco"
+                value={ficha.risco ?? ""}
+                maxLength={RISCO_MAX}
+                onChange={(e) => setFicha((f) => ({ ...f, risco: e.target.value }))}
+                placeholder="Ex.: Médio — depende de aprovação regulatória"
+                aria-invalid={!!errosFicha.risco}
+                className={cls.input}
+              />
+              {errosFicha.risco && <p className="mt-1 text-[13px] text-red-600">{errosFicha.risco}</p>}
+            </div>
             <div className="sm:col-span-2">
               <label htmlFor="proj-ficha-uso" className={cls.label}>
                 Uso dos recursos

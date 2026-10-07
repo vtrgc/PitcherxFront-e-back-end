@@ -7,6 +7,8 @@ import GaleriaImagens from "../../components/GaleriaImagens";
 import { imagensDaGaleria } from "../../lib/galeria";
 
 import EmptyState from "../../components/EmptyState";
+import Paginacao from "../../components/ui/Paginacao";
+import { usePaginacao } from "../../hook/usePaginacao";
 import { useRequireAdmin } from "../../hook/useRequireAdmin";
 import { mensagemErro } from "../../lib/api";
 import Avatar from "../../components/ui/Avatar";
@@ -85,6 +87,7 @@ export default function AdminPostagensPage() {
       })
       .sort((a, b) => b.idPostagem - a.idPostagem);
   }, [postagens, busca, mapaUsuarios]);
+  const paginacao = usePaginacao(filtrados, { chaveReinicio: busca });
 
   async function excluir(id: number, titulo: string) {
     if (!(await confirmar(`Excluir permanentemente a postagem "${titulo}"? Os comentários dela também serão removidos.`, { titulo: "Excluir postagem", perigo: true }))) return;
@@ -186,8 +189,9 @@ export default function AdminPostagensPage() {
         ) : erroCarregamento ? null : filtrados.length === 0 ? (
           <EmptyState icon={FileText} title="Nenhuma postagem encontrada" description="Ajuste a busca ou aguarde novas postagens serem publicadas." />
         ) : (
+          <>
           <ul className="divide-y divide-ink-100">
-            {filtrados.map((p) => {
+            {paginacao.itens.map((p) => {
               const autor = mapaUsuarios.get(p.usuarioId);
               const comentariosPost = comentariosPorPostagem.get(p.idPostagem) ?? [];
               const curtidasPost = curtidas[p.idPostagem];
@@ -313,6 +317,18 @@ export default function AdminPostagensPage() {
               );
             })}
           </ul>
+          <Paginacao
+            pagina={paginacao.pagina}
+            totalPaginas={paginacao.totalPaginas}
+            total={paginacao.total}
+            inicio={paginacao.inicio}
+            fim={paginacao.fim}
+            tamanho={paginacao.tamanho}
+            onPagina={paginacao.irPara}
+            onTamanho={paginacao.setTamanho}
+            rotulo="postagens"
+          />
+          </>
         )}
       </div>
     </>

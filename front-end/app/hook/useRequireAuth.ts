@@ -22,6 +22,9 @@ export function useRequireAuth(area: AreaPagina = "autenticado") {
   const pathname = usePathname();
 
   const bloqueadoParaAdmin = area === "usuario" && isAdmin;
+  // Conta criada mas ainda não verificada pelo código do e-mail (ou desativada): o backend
+  // a mantém inativa; a interface só libera as páginas depois da verificação.
+  const aguardandoVerificacao = isAuthenticated && usuario?.isActive === false;
 
   useEffect(() => {
     if (isLoading) return;
@@ -33,14 +36,19 @@ export function useRequireAuth(area: AreaPagina = "autenticado") {
       router.replace(`/auth/login${query ? `?${query}` : ""}`);
       return;
     }
+    if (aguardandoVerificacao) {
+      const destino = pathname && pathname !== "/" ? `?redirect=${encodeURIComponent(pathname)}` : "";
+      router.replace(`/auth/verificar-conta${destino}`);
+      return;
+    }
     if (bloqueadoParaAdmin) {
       router.replace("/admin");
     }
-  }, [isLoading, isAuthenticated, bloqueadoParaAdmin, router, pathname, sessaoExpirada]);
+  }, [isLoading, isAuthenticated, bloqueadoParaAdmin, aguardandoVerificacao, router, pathname, sessaoExpirada]);
 
   return {
     usuario,
     isAdmin,
-    pronto: !isLoading && isAuthenticated && !bloqueadoParaAdmin,
+    pronto: !isLoading && isAuthenticated && !bloqueadoParaAdmin && !aguardandoVerificacao,
   };
 }

@@ -1,15 +1,16 @@
 import { api } from "../lib/api";
-import { lerDescricaoProjeto } from "../lib/fichaProjeto";
+import { combinarFicha, lerDescricaoProjeto } from "../lib/fichaProjeto";
 import { FiltroBuscaProjeto, Projeto, ProjetoRequest } from "../types/Projeto";
 
 /**
  * Toda resposta de projeto passa por aqui: `descricaoProjeto` fica só com o texto visível e
- * a ficha financeira guardada no fim da descrição vai para `ficha` (ver lib/fichaProjeto).
+ * `ficha` reúne os campos financeiros reais (metaFinanceira, valorArrecadado, riscoProjeto)
+ * com o complemento guardado no fim da descrição (ver lib/fichaProjeto).
  */
 export function normalizarProjeto(projeto: Projeto): Projeto {
   if (!projeto || typeof projeto !== "object") return projeto;
   const { texto, ficha } = lerDescricaoProjeto(projeto.descricaoProjeto);
-  return { ...projeto, descricaoProjeto: texto, ficha };
+  return { ...projeto, descricaoProjeto: texto, ficha: combinarFicha(projeto, ficha) };
 }
 
 function normalizarLista(lista: Projeto[] | null | undefined): Projeto[] {
@@ -24,7 +25,10 @@ export async function buscarProjeto(id: number) {
   return normalizarProjeto(await api<Projeto>(`/projeto/${id}`));
 }
 
-/** `data.descricaoProjeto` já deve vir montado com `montarDescricaoProjeto` (texto + ficha). */
+/**
+ * `data.descricaoProjeto` já deve vir montado com `montarDescricaoProjeto` (texto + complemento)
+ * e os campos financeiros com `camposFinanceirosApi` (`metaFinanceira` é obrigatório).
+ */
 export async function criarProjeto(data: ProjetoRequest) {
   return normalizarProjeto(
     await api<Projeto>("/projeto", {

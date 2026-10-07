@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Briefcase, Search, Trash2, ChevronDown, ExternalLink, Users2 } from "lucide-react";
 
 import EmptyState from "../../components/EmptyState";
+import Paginacao from "../../components/ui/Paginacao";
+import { usePaginacao } from "../../hook/usePaginacao";
 import { useRequireAdmin } from "../../hook/useRequireAdmin";
 import { mensagemErro } from "../../lib/api";
 import { formatarData } from "../../lib/date";
@@ -65,6 +67,7 @@ export default function AdminProjetosPage() {
       .filter((p) => (filtroStatus === "todos" ? true : filtroStatus === "ativos" ? p.active : !p.active))
       .sort((a, b) => b.idProjeto - a.idProjeto);
   }, [projetos, busca, filtroTipo, filtroStatus]);
+  const paginacao = usePaginacao(filtrados, { chaveReinicio: `${busca}|${filtroTipo}|${filtroStatus}` });
 
   async function excluir(id: number, nome: string) {
     // contrato.id_projeto não tem cascade: com contratos vinculados o servidor recusa (erro 500).
@@ -183,8 +186,9 @@ export default function AdminProjetosPage() {
         ) : erroCarregamento ? null : filtrados.length === 0 ? (
           <EmptyState icon={Briefcase} title="Nenhum projeto encontrado" description="Ajuste os filtros ou aguarde novos projetos serem publicados." />
         ) : (
+          <>
           <ul className="divide-y divide-ink-100">
-            {filtrados.map((p) => {
+            {paginacao.itens.map((p) => {
               const vinculo = vinculos[p.idProjeto];
               return (
                 <li key={p.idProjeto}>
@@ -278,6 +282,18 @@ export default function AdminProjetosPage() {
               );
             })}
           </ul>
+          <Paginacao
+            pagina={paginacao.pagina}
+            totalPaginas={paginacao.totalPaginas}
+            total={paginacao.total}
+            inicio={paginacao.inicio}
+            fim={paginacao.fim}
+            tamanho={paginacao.tamanho}
+            onPagina={paginacao.irPara}
+            onTamanho={paginacao.setTamanho}
+            rotulo="projetos"
+          />
+          </>
         )}
       </div>
     </>

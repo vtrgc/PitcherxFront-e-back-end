@@ -15,14 +15,18 @@ import {
   Briefcase,
   FileText,
   Activity,
+  IdCard,
+  HandCoins,
 } from "lucide-react";
 
 
 
 export const SECOES_ADMIN = [
   { href: "/admin/usuarios", titulo: "Usuários", icon: Users },
+  { href: "/admin/perfis", titulo: "Perfis profissionais", icon: IdCard },
   { href: "/admin/projetos", titulo: "Projetos", icon: Briefcase },
   { href: "/admin/postagens", titulo: "Postagens", icon: FileText },
+  { href: "/admin/propostas", titulo: "Propostas", icon: HandCoins },
   { href: "/admin/interacoes", titulo: "Interações", icon: Activity },
   { href: "/admin/tipos-projeto", titulo: "Tipos de projeto", icon: Tags },
   { href: "/admin/areas", titulo: "Áreas", icon: LayoutGrid },

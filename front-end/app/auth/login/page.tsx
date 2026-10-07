@@ -23,10 +23,11 @@ export default function Login() {
 function LoginConteudo() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, logout, isAuthenticated, isAdmin, isLoading } = useAuth();
+  const { login, usuario: usuarioLogado, isAuthenticated, isAdmin, isLoading } = useAuth();
 
   const destino = caminhoInternoSeguro(searchParams.get("redirect"));
   const sessaoExpirada = searchParams.get("expirada") === "1";
+  const acabouDeCadastrar = searchParams.get("cadastro") === "1";
 
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -36,9 +37,10 @@ function LoginConteudo() {
   // Quem já está logado não precisa ver a tela de login.
   useEffect(() => {
     if (!isLoading && isAuthenticated && !loading) {
-      router.replace(isAdmin ? "/admin" : destino || "/feed");
+      if (usuarioLogado && !usuarioLogado.isActive) router.replace("/auth/verificar-conta");
+      else router.replace(isAdmin ? "/admin" : destino || "/feed");
     }
-  }, [isLoading, isAuthenticated, isAdmin, destino, router, loading]);
+  }, [isLoading, isAuthenticated, isAdmin, destino, router, loading, usuarioLogado]);
 
   async function handleEntrar() {
     if (!email.trim() || !senha) {
@@ -53,11 +55,11 @@ function LoginConteudo() {
       const usuario = await login({ emailUsuario: email.trim(), senhaUsuario: senha });
 
       if (!usuario.isActive) {
-        // O backend emite o token mesmo para contas desativadas; a interface não
-        // permite seguir para respeitar a desativação feita pelo administrador.
-        logout({ redirecionar: false });
-        setErro("Sua conta está desativada. Fale com um administrador da plataforma.");
-        setLoading(false);
+        // Conta ainda não verificada (o cadastro cria a conta inativa até o código do
+        // e-mail ser confirmado) ou desativada pelo administrador. A verificação exige o
+        // token, então a sessão continua aberta e a tela de verificação trata os dois casos.
+        const query = destino ? `?redirect=${encodeURIComponent(destino)}` : "";
+        router.replace(`/auth/verificar-conta${query}`);
         return;
       }
 
@@ -94,6 +96,11 @@ function LoginConteudo() {
         >
           {sessaoExpirada && !erro && (
             <AuthAlert variant="success">Sua sessão expirou. Entre novamente para continuar.</AuthAlert>
+          )}
+          {acabouDeCadastrar && !erro && (
+            <AuthAlert variant="success">
+              Conta criada! Entre com seu e-mail e senha e digite o código de verificação que enviamos por e-mail.
+            </AuthAlert>
           )}
           {erro && <AuthAlert>{erro}</AuthAlert>}
 

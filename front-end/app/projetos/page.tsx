@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Briefcase, Plus, Calendar, ChevronRight } from "lucide-react";
 
 import PageShell from "../components/PageShell";
+import Paginacao from "../components/ui/Paginacao";
+import { usePaginacao } from "../hook/usePaginacao";
 import EmptyState from "../components/EmptyState";
 import FormProjeto from "../components/FormProjeto";
 import ImagemRemota from "../components/ImagemRemota";
@@ -120,6 +122,7 @@ export default function ProjetosPage() {
     const base = filtroAtivo && resultadoBusca ? resultadoBusca : projetos;
     return base.filter((p) => filtro === "todos" || meus.has(p.idProjeto));
   }, [projetos, resultadoBusca, filtroAtivo, filtro, meus]);
+  const paginacao = usePaginacao(visiveis, { tamanhoInicial: 12, chaveReinicio: `${filtro}|${filtroAtivo}|${busca}|${dataDe}|${dataAte}` });
 
   function limparFiltros() {
     setBusca("");
@@ -269,8 +272,9 @@ export default function ProjetosPage() {
           />
         </div>
       ) : (
+        <>
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {visiveis.map((projeto) => (
+          {paginacao.itens.map((projeto) => (
             <Link
               key={projeto.idProjeto}
               href={`/projetos/${projeto.idProjeto}`}
@@ -307,6 +311,23 @@ export default function ProjetosPage() {
             </Link>
           ))}
         </div>
+        <div className={`${cls.card} overflow-hidden`}>
+          <Paginacao
+            pagina={paginacao.pagina}
+            totalPaginas={paginacao.totalPaginas}
+            total={paginacao.total}
+            inicio={paginacao.inicio}
+            fim={paginacao.fim}
+            tamanho={paginacao.tamanho}
+            onPagina={(p) => {
+              paginacao.irPara(p);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            onTamanho={paginacao.setTamanho}
+            rotulo="projetos"
+          />
+        </div>
+        </>
       )}
     </PageShell>
   );

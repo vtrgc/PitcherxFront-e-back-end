@@ -1,11 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Home, Pencil, Trash2, Plus, X } from "lucide-react";
+import { Home, Pencil, Trash2, Plus } from "lucide-react";
 
 import EmptyState from "../../components/EmptyState";
 import FormEndereco from "../../components/FormEndereco";
 import Alerta from "../../components/ui/Alerta";
+import CampoBusca from "../../components/ui/CampoBusca";
+import Modal from "../../components/ui/Modal";
+import Paginacao from "../../components/ui/Paginacao";
+import { usePaginacao } from "../../hook/usePaginacao";
+import { correspondeBusca } from "../../lib/listagem";
 import { cls } from "../../components/ui/estilos";
 import { useFeedback } from "../../components/ui/FeedbackProvider";
 import { useRequireAdmin } from "../../hook/useRequireAdmin";
@@ -33,6 +38,8 @@ export default function AdminEnderecosPage() {
   const [editando, setEditando] = useState<Endereco | null>(null);
   const [criando, setCriando] = useState(false);
   const [usuarioNovo, setUsuarioNovo] = useState<number | "">("");
+  const [busca, setBusca] = useState("");
+  const [filtroUf, setFiltroUf] = useState("");
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -53,6 +60,19 @@ export default function AdminEnderecosPage() {
   }, [pronto, carregar]);
 
   const nomes = useMemo(() => new Map(usuarios.map((u) => [u.idUsuario, u.nomeUsuario])), [usuarios]);
+  const ufs = useMemo(() => [...new Set(enderecos.map((e) => (e.uf || "").toUpperCase()).filter(Boolean))].sort(), [enderecos]);
+  const filtrados = useMemo(
+    () =>
+      enderecos
+        .filter(
+          (e) =>
+            (!filtroUf || (e.uf || "").toUpperCase() === filtroUf) &&
+            correspondeBusca(busca, e.logradouro, e.bairro, e.complemento, e.cep, formatarCep(e.cep), e.uf, e.numeroCasa, nomes.get(e.usuarioId))
+        )
+        .sort((a, b) => b.idEndereco - a.idEndereco),
+    [enderecos, busca, filtroUf, nomes]
+  );
+  const paginacao = usePaginacao(filtrados, { chaveReinicio: `${busca}|${filtroUf}` });
 
   function fecharFormulario() {
     setEditando(null);
@@ -89,62 +109,21 @@ export default function AdminEnderecosPage() {
             <p className="text-[0.8125rem] text-ink-500 mt-0.5">Endereços cadastrados vinculados a cada usuário.</p>
           </div>
         </div>
-        {!criando && !editando && (
-          <button type="button" onClick={() => setCriando(true)} className={cls.btnPrimario}>
-            <Plus size={16} aria-hidden="true" /> Novo endereço
-          </button>
-        )}
+        <button type="button" onClick={() => setCriando(true)} className={cls.btnPrimario}>
+          <Plus size={16} aria-hidden="true" /> Cadastrar
+        </button>
       </div>
 
-      {(criando || editando) && (
-        <section className={`${cls.card} p-5 sm:p-6`} aria-labelledby="titulo-form-endereco">
-          <div className="flex items-start justify-between gap-3">
-            <h2 id="titulo-form-endereco" className={cls.h2}>
-              {editando ? `Editar endereço de ${nomes.get(editando.usuarioId) ?? `Usuário #${editando.usuarioId}`}` : "Novo endereço"}
-            </h2>
-            <button type="button" onClick={fecharFormulario} className={cls.btnIcone} aria-label="Fechar formulário">
-              <X size={16} />
-            </button>
-          </div>
-
-          {!editando && (
-            <div className="mt-4 max-w-sm">
-              <label htmlFor="endereco-usuario" className={cls.label}>
-                Usuário
-              </label>
-              <select
-                id="endereco-usuario"
-                value={usuarioNovo}
-                onChange={(e) => setUsuarioNovo(e.target.value ? Number(e.target.value) : "")}
-                className={`${cls.input} !bg-white`}
-              >
-                <option value="">Selecione o usuário</option>
-                {usuarios.map((u) => (
-                  <option key={u.idUsuario} value={u.idUsuario}>
-                    {u.nomeUsuario}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {usuarioDoForm ? (
-            <div className="mt-4">
-              <FormEndereco
-                key={editando?.idEndereco ?? `novo-${usuarioDoForm}`}
-                usuarioId={Number(usuarioDoForm)}
-                endereco={editando}
-                onSalvo={() => {
-                  fecharFormulario();
-                  carregar();
-                }}
-              />
-            </div>
-          ) : (
-            <p className={`${cls.textoSuave} mt-3`}>Selecione o usuário para preencher o endereço.</p>
-          )}
-        </section>
-      )}
+      <CampoBusca valor={busca} onChange={setBusca} placeholder="Buscar por rua, bairro, CEP ou usuário">
+        <select aria-label="Filtrar por UF" value={filtroUf} onChange={(e) => setFiltroUf(e.target.value)} className={`${cls.input} !w-auto !py-2.5 !bg-white`}>
+          <option value="">Todas as UFs</option>
+          {ufs.map((uf) => (
+            <option key={uf} value={uf}>
+              {uf}
+            </option>
+          ))}
+        </select>
+      </CampoBusca>
 
       {erroCarregamento && !loading && <Alerta onTentarNovamente={carregar}>{erroCarregamento}</Alerta>}
 
@@ -156,9 +135,12 @@ export default function AdminEnderecosPage() {
           </div>
         ) : erroCarregamento ? null : enderecos.length === 0 ? (
           <EmptyState icon={Home} title="Nenhum endereço cadastrado ainda" />
+        ) : filtrados.length === 0 ? (
+          <EmptyState icon={Home} title="Nenhum resultado encontrado" description="Tente buscar por outro termo ou limpe os filtros." />
         ) : (
+          <>
           <ul className="divide-y divide-ink-100">
-            {enderecos.map((endereco) => (
+            {paginacao.itens.map((endereco) => (
               <li key={endereco.idEndereco} className="flex items-start justify-between gap-4 px-4 py-4 transition-colors hover:bg-brand-50/60 sm:px-6">
                 <div className="min-w-0">
                   <h3 className="font-display text-[14.5px] font-semibold text-ink-900 break-words">
@@ -176,7 +158,6 @@ export default function AdminEnderecosPage() {
                     onClick={() => {
                       setCriando(false);
                       setEditando(endereco);
-                      window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
                     className={cls.btnIcone}
                     aria-label="Editar endereço"
@@ -190,8 +171,63 @@ export default function AdminEnderecosPage() {
               </li>
             ))}
           </ul>
+          <Paginacao
+            pagina={paginacao.pagina}
+            totalPaginas={paginacao.totalPaginas}
+            total={paginacao.total}
+            inicio={paginacao.inicio}
+            fim={paginacao.fim}
+            tamanho={paginacao.tamanho}
+            onPagina={paginacao.irPara}
+            onTamanho={paginacao.setTamanho}
+            rotulo="endereços"
+          />
+          </>
         )}
       </div>
+      <Modal
+        aberto={criando || !!editando}
+        titulo={editando ? `Editar endereço de ${nomes.get(editando.usuarioId) ?? `Usuário #${editando.usuarioId}`}` : "Cadastrar endereço"}
+        onFechar={fecharFormulario}
+        largura="max-w-2xl"
+      >
+        {!editando && (
+          <div className="mb-4 max-w-sm">
+            <label htmlFor="endereco-usuario" className={cls.label}>
+              Usuário
+            </label>
+            <select
+              id="endereco-usuario"
+              value={usuarioNovo}
+              onChange={(e) => setUsuarioNovo(e.target.value ? Number(e.target.value) : "")}
+              className={`${cls.input} !bg-white`}
+            >
+              <option value="">Selecione o usuário</option>
+              {[...usuarios]
+                .sort((a, b) => a.nomeUsuario.localeCompare(b.nomeUsuario, "pt-BR"))
+                .map((u) => (
+                  <option key={u.idUsuario} value={u.idUsuario}>
+                    {u.nomeUsuario} ({u.emailUsuario})
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
+
+        {usuarioDoForm ? (
+          <FormEndereco
+            key={editando?.idEndereco ?? `novo-${usuarioDoForm}`}
+            usuarioId={Number(usuarioDoForm)}
+            endereco={editando}
+            onSalvo={() => {
+              fecharFormulario();
+              carregar();
+            }}
+          />
+        ) : (
+          <p className={cls.textoSuave}>Selecione o usuário para preencher o endereço.</p>
+        )}
+      </Modal>
     </>
   );
 }
