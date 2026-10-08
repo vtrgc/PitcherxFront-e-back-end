@@ -6,8 +6,9 @@ import Link from "next/link";
 import { Briefcase, Plus, Calendar, ChevronRight } from "lucide-react";
 
 import PageShell from "../components/PageShell";
-import Paginacao from "../components/ui/Paginacao";
+import Paginacao from "../components/admin/Paginacao";
 import { usePaginacao } from "../hook/usePaginacao";
+import { OPCOES_POR_PAGINA_GRADE } from "../lib/listagem";
 import EmptyState from "../components/EmptyState";
 import FormProjeto from "../components/FormProjeto";
 import ImagemRemota from "../components/ImagemRemota";
@@ -122,7 +123,7 @@ export default function ProjetosPage() {
     const base = filtroAtivo && resultadoBusca ? resultadoBusca : projetos;
     return base.filter((p) => filtro === "todos" || meus.has(p.idProjeto));
   }, [projetos, resultadoBusca, filtroAtivo, filtro, meus]);
-  const paginacao = usePaginacao(visiveis, { tamanhoInicial: 12, chaveReinicio: `${filtro}|${filtroAtivo}|${busca}|${dataDe}|${dataAte}` });
+  const paginacao = usePaginacao(visiveis, `${filtro}|${filtroAtivo ? `${busca}|${dataDe}|${dataAte}` : ""}`);
 
   function limparFiltros() {
     setBusca("");
@@ -273,60 +274,47 @@ export default function ProjetosPage() {
         </div>
       ) : (
         <>
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {paginacao.itens.map((projeto) => (
-            <Link
-              key={projeto.idProjeto}
-              href={`/projetos/${projeto.idProjeto}`}
-              className={`${cls.card} hover:border-brand-300 hover:shadow-[0_4px_12px_-6px_rgba(21,15,40,0.14)] group flex flex-col overflow-hidden`}
-            >
-              <div className="relative h-32 w-full bg-brand-gradient-soft">
-                <ImagemRemota url={projeto.urlImagemProjeto} alt="" />
-                <span
-                  className={`${linhaDoTempo(projeto).situacao === "em_andamento" ? cls.chipAtivo : cls.chipInativo} absolute right-3 top-3 shadow-soft`}
-                >
-                  {ROTULO_SITUACAO[linhaDoTempo(projeto).situacao]}
-                </span>
-                {meus.has(projeto.idProjeto) && (
-                  <span className={`${cls.chip} absolute left-3 top-3 shadow-soft`}>Seu projeto</span>
-                )}
-              </div>
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {paginacao.itens.map((projeto) => (
+              <Link
+                key={projeto.idProjeto}
+                href={`/projetos/${projeto.idProjeto}`}
+                className={`${cls.card} hover:border-brand-300 hover:shadow-[0_4px_12px_-6px_rgba(21,15,40,0.14)] group flex flex-col overflow-hidden`}
+              >
+                <div className="relative h-32 w-full bg-brand-gradient-soft">
+                  <ImagemRemota url={projeto.urlImagemProjeto} alt="" />
+                  <span
+                    className={`${linhaDoTempo(projeto).situacao === "em_andamento" ? cls.chipAtivo : cls.chipInativo} absolute right-3 top-3 shadow-soft`}
+                  >
+                    {ROTULO_SITUACAO[linhaDoTempo(projeto).situacao]}
+                  </span>
+                  {meus.has(projeto.idProjeto) && (
+                    <span className={`${cls.chip} absolute left-3 top-3 shadow-soft`}>Seu projeto</span>
+                  )}
+                </div>
 
-              <div className="flex flex-1 flex-col p-5">
-                <span className={`${cls.chip} w-fit`}>{tipoMap.get(projeto.tipoProjetoId) || "Projeto"}</span>
-                <h3 className="font-display mt-3 text-[15.5px] font-bold text-ink-900 group-hover:text-brand-700 break-words">
-                  {projeto.nomeProjeto}
-                </h3>
-                <p className={`${cls.texto} mt-1.5 line-clamp-3 break-words`}>{projeto.descricaoProjeto}</p>
-                <ResumoFinanceiroMini ficha={projeto.ficha} className="mt-3" />
-                <div className="text-[0.8125rem] text-ink-500 mt-4 flex items-center gap-1.5">
-                  <Calendar size={13} aria-hidden="true" />
-                  {projeto.dataInicioProjeto} — {projeto.dataFimProjeto}
+                <div className="flex flex-1 flex-col p-5">
+                  <span className={`${cls.chip} w-fit`}>{tipoMap.get(projeto.tipoProjetoId) || "Projeto"}</span>
+                  <h3 className="font-display mt-3 text-[15.5px] font-bold text-ink-900 group-hover:text-brand-700 break-words">
+                    {projeto.nomeProjeto}
+                  </h3>
+                  <p className={`${cls.texto} mt-1.5 line-clamp-3 break-words`}>{projeto.descricaoProjeto}</p>
+                  <ResumoFinanceiroMini ficha={projeto.ficha} className="mt-3" />
+                  <div className="text-[0.8125rem] text-ink-500 mt-4 flex items-center gap-1.5">
+                    <Calendar size={13} aria-hidden="true" />
+                    {projeto.dataInicioProjeto} — {projeto.dataFimProjeto}
+                  </div>
+                  <div className="border-t border-ink-100 mt-auto flex items-center justify-between pt-3.5 text-[13.5px] font-semibold text-brand-700">
+                    Ver detalhes
+                    <ChevronRight size={15} aria-hidden="true" />
+                  </div>
                 </div>
-                <div className="border-t border-ink-100 mt-auto flex items-center justify-between pt-3.5 text-[13.5px] font-semibold text-brand-700">
-                  Ver detalhes
-                  <ChevronRight size={15} aria-hidden="true" />
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-        <div className={`${cls.card} overflow-hidden`}>
-          <Paginacao
-            pagina={paginacao.pagina}
-            totalPaginas={paginacao.totalPaginas}
-            total={paginacao.total}
-            inicio={paginacao.inicio}
-            fim={paginacao.fim}
-            tamanho={paginacao.tamanho}
-            onPagina={(p) => {
-              paginacao.irPara(p);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            onTamanho={paginacao.setTamanho}
-            rotulo="projetos"
-          />
-        </div>
+              </Link>
+            ))}
+          </div>
+          <div className={`${cls.card} mt-6 overflow-hidden [&>nav]:border-t-0`}>
+            <Paginacao {...paginacao} onPagina={paginacao.irPara} onPorPagina={paginacao.setPorPagina} rotuloItens="projetos" opcoesPorPagina={OPCOES_POR_PAGINA_GRADE} />
+          </div>
         </>
       )}
     </PageShell>

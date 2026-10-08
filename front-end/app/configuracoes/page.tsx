@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Key, Trash2, Settings, ChevronRight, Loader2, UserRound, Bell, Users, LogOut, Mail, Phone, Clock } from "lucide-react";
+import { Key, Trash2, Settings, ChevronRight, Loader2, UserRound, Bell, Users, LogOut, Mail, Phone, Clock, PowerOff } from "lucide-react";
 import PageShell from "../components/PageShell";
 import Alerta from "../components/ui/Alerta";
 import { cls } from "../components/ui/estilos";
 import { useFeedback } from "../components/ui/FeedbackProvider";
 import { useAuth } from "../context/AuthContext";
-import { redefinirSenha, excluirUsuario } from "../services/usuario.service";
+import { redefinirSenha, excluirUsuario, ativarDesativarUsuario } from "../services/usuario.service";
 import { ApiError, decodificarToken, getToken, mensagemErro } from "../lib/api";
 import { useNotificacoes } from "../context/NotificacoesContext";
 import { SENHA_MINIMA } from "../lib/validacao";
@@ -17,7 +17,8 @@ import CartaoVerificacao from "../components/perfil/CartaoVerificacao";
 
 export default function Configuracoes() {
   const { usuario, logout, isAdmin } = useAuth();
-  const { notificar } = useFeedback();
+  const { notificar, confirmar } = useFeedback();
+  const [desativando, setDesativando] = useState(false);
   const { naoLidas } = useNotificacoes();
   // Perfil profissional: traz o CPF/CNPJ usado na verificação de identidade.
   const dadosPerfil = useDadosPerfil(isAdmin ? null : usuario?.idUsuario);
@@ -82,6 +83,25 @@ export default function Configuracoes() {
       );
     } finally {
       setSalvandoSenha(false);
+    }
+  }
+
+  // PUT /usuario/ativar-desativar/{id}: o próprio usuário pode desativar a conta; só o
+  // administrador consegue reativá-la (o login não aceita contas inativas).
+  async function desativarConta() {
+    if (!usuario || desativando) return;
+    const ok = await confirmar(
+      "Sua conta ficará inativa e você será desconectado. Para voltar a usar o PitcherX, será preciso pedir a reativação ao administrador da plataforma.",
+      { titulo: "Desativar conta", perigo: true, confirmarLabel: "Desativar conta" }
+    );
+    if (!ok) return;
+    setDesativando(true);
+    try {
+      await ativarDesativarUsuario(usuario.idUsuario);
+      logout();
+    } catch (error) {
+      notificar(mensagemErro(error, "Não foi possível desativar a conta."));
+      setDesativando(false);
     }
   }
 
@@ -300,6 +320,24 @@ export default function Configuracoes() {
             <LogOut size={16} aria-hidden="true" /> Sair da conta
           </button>
         </div>
+
+        {!isAdmin && (
+          <div className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <span className="flex items-center gap-3 text-[14.5px] font-medium text-ink-900">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+                <PowerOff size={18} aria-hidden="true" />
+              </span>
+              <span>
+                Desativar conta
+                <span className="block text-[12.5px] font-normal text-ink-500">Sua conta fica inativa (sem excluir dados). Só o administrador pode reativá-la.</span>
+              </span>
+            </span>
+            <button type="button" onClick={desativarConta} disabled={desativando} className={cls.btnContorno}>
+              {desativando ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <PowerOff size={16} aria-hidden="true" />}
+              {desativando ? "Desativando..." : "Desativar"}
+            </button>
+          </div>
+        )}
 
         <div>
           <button

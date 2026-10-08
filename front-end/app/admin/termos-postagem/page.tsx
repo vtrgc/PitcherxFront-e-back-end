@@ -18,6 +18,7 @@ export default function AdminTermosPostagemPage() {
       titulo="Termos de postagem"
       descricao="Regras exibidas a quem publica no feed."
       icone={Tag}
+      nomeItem="termo de postagem"
       listar={listarTermos}
       criar={criarTermo}
       atualizar={atualizarTermo}

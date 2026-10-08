@@ -59,8 +59,8 @@ function VerificarContaConteudo() {
       router.replace("/auth/login?redirect=%2Fauth%2Fverificar-conta");
       return;
     }
-    // Conta já ativa: nada a verificar.
-    if (usuario?.isActive) router.replace(proximaTela(isAdmin));
+    // Conta já ativa ou de administrador: nada a verificar.
+    if (usuario?.isActive || isAdmin) router.replace(proximaTela(isAdmin));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, isAuthenticated, usuario?.isActive, isAdmin, enviando, verificada]);
 

@@ -4,26 +4,36 @@ import { useMemo, useState } from "react";
 import { paginar } from "../lib/listagem";
 
 /**
- * Paginação no cliente (ver lib/listagem). A página volta para 1 quando a busca/filtro muda
- * (`chaveReinicio`) e é ajustada automaticamente se a lista diminuir (ex.: após excluir).
+ * Paginação no cliente para as listas do usuário (Projetos, Propostas, Contratos).
+ * Os endpoints `GET /projeto`, `/proposta` e `/contrato` devolvem listas completas, sem
+ * `Pageable`, então a página é recortada aqui. Quando `chave` muda (filtro/aba/busca),
+ * volta para a página 1.
  */
-export function usePaginacao<T>(itens: T[], { tamanhoInicial = 10, chaveReinicio = "" }: { tamanhoInicial?: number; chaveReinicio?: string } = {}) {
-  const [estado, setEstado] = useState({ pagina: 1, chave: chaveReinicio });
-  const [tamanho, setTamanhoState] = useState(tamanhoInicial);
+export function usePaginacao<T>(
+  itens: T[],
+  opcoes: string | { chaveReinicio?: string; tamanhoInicial?: number } = "",
+  porPaginaInicialArg = 12
+) {
+  // Aceita também a forma `{ chaveReinicio, tamanhoInicial }` (usada por `CrudAdmin`).
+  const chave = typeof opcoes === "string" ? opcoes : (opcoes.chaveReinicio ?? "");
+  const porPaginaInicial = typeof opcoes === "string" ? porPaginaInicialArg : (opcoes.tamanhoInicial ?? 10);
+  const [estado, setEstado] = useState({ chave, pagina: 1 });
+  const [porPagina, setPorPaginaEstado] = useState(porPaginaInicial);
+  if (estado.chave !== chave) setEstado({ chave, pagina: 1 });
+  const pagina = estado.chave === chave ? estado.pagina : 1;
 
-  // Mudou a busca/filtro: recomeça da primeira página (ajuste durante a renderização).
-  const paginaPedida = estado.chave === chaveReinicio ? estado.pagina : 1;
-  if (estado.chave !== chaveReinicio) setEstado({ pagina: 1, chave: chaveReinicio });
+  const fatia = useMemo(() => paginar(itens, pagina, porPagina), [itens, pagina, porPagina]);
 
-  const fatia = useMemo(() => paginar(itens, paginaPedida, tamanho), [itens, paginaPedida, tamanho]);
-
+  const setPorPagina = (n: number) => {
+    setPorPaginaEstado(n);
+    setEstado({ chave, pagina: 1 });
+  };
   return {
     ...fatia,
-    tamanho,
-    irPara: (pagina: number) => setEstado({ pagina, chave: chaveReinicio }),
-    setTamanho: (novo: number) => {
-      setTamanhoState(novo);
-      setEstado({ pagina: 1, chave: chaveReinicio });
-    },
+    porPagina,
+    irPara: (p: number) => setEstado({ chave, pagina: p }),
+    setPorPagina,
+    tamanho: porPagina,
+    setTamanho: setPorPagina,
   };
 }
