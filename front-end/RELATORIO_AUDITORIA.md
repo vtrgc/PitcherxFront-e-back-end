@@ -126,3 +126,46 @@ Alterados:
 - `app/configuracoes/page.tsx` (desativar conta)
 - `app/projetos/page.tsx`, `app/propostas/page.tsx`, `app/contratos/page.tsx` (paginação)
 - `O_QUE_FOI_ADICIONADO.md`
+
+## 8. Backend novo (PitcherX-BackEnd-main.zip, migration V25) — testado de verdade
+
+O backend enviado foi compilado e executado localmente (PostgreSQL 16) só para teste; nenhum
+arquivo dele foi alterado. O front foi exercitado contra ele no navegador.
+
+### Erro "Não foi possível carregar seus dados" — corrigido no front
+
+**Causa:** o `SecurityConfig` novo deixou de chamar `.cors(...)`. O navegador envia um
+"preflight" (OPTIONS) antes de toda requisição com token, e o Spring Security responde **403**.
+Só o login passava; perfil, feed, projetos etc. falhavam.
+
+**Correção (front):** o navegador não chama mais o backend direto. Todas as chamadas vão para
+`/api-backend/*`, na mesma origem do front, e o `next.config.js` repassa para o backend
+(`BACKEND_URL`, padrão `http://localhost:8080`). Sem requisição entre origens, não há preflight.
+
+- `next.config.js`: `rewrites()` de `/api-backend/:path*` para `BACKEND_URL`.
+- `app/lib/api.ts`: `API_URL = "/api-backend"`.
+- `.env.example`: variável `BACKEND_URL` (gere o build de novo ao mudar).
+
+### Administrador e verificação por código — corrigido no front
+
+O `DataInitializer` cria o admin com `active = false` e sem código de verificação (o padrão do
+`Usuario` virou `false`). O front mandava o admin para "Verifique sua conta", sem saída.
+Agora o administrador nunca passa pela verificação.
+
+### Testes contra o backend real (19/19)
+
+Cadastro → e-mail com código → código errado (mensagem) → código certo → completar cadastro
+(perfil profissional) → publicar com imagem → comentar → curtir → criar projeto com meta
+financeira e imagem (+ vínculo de criador) → proposta → editar perfil → seguir outra pessoa →
+admin (login direto no painel, cadastro de tipo de projeto, especialidade e área, todas as
+listas). Nenhuma chamada da API falhou (fora o código errado, de propósito).
+
+### Problemas do backend (não dá para corrigir pelo front)
+
+| Problema | Efeito | Como resolver (no backend/banco) |
+| --- | --- | --- |
+| `PerfilUsuario.biografia` com `@Lob` numa coluna `TEXT` | Qualquer perfil com biografia preenchida (até `''`) quebra a leitura: `Bad value for type long` → **500** em `GET /perfil-usuario` e **no login** dessa pessoa. A V25 faz `UPDATE perfil_usuario SET biografia = ''`, então todo perfil antigo quebra | Rodar no banco: `UPDATE perfil_usuario SET biografia = NULL;` (nenhum endpoint grava biografia) ou tirar o `@Lob` |
+| `V7` usa o tipo `DOUBLE` | Banco novo não sobe: `type "double" does not exist` (PostgreSQL usa `DOUBLE PRECISION`) | Trocar para `DOUBLE PRECISION` |
+| `ddl-auto: validate` × migrations | O backend recusa o próprio esquema (`numeric` × `Double` em `valor_contra_proposta`) e não inicia | Ajustar os tipos ou usar `ddl-auto: update` |
+| `SecurityConfig` sem `.cors(...)` | Preflight 403 para qualquer cliente em outra origem | O front já contorna com o proxy |
+| Admin inicial com `active = false` | Admin aparece como "Inativo" | O front já trata o admin como liberado |

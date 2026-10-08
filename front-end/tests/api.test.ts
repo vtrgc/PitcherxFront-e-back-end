@@ -69,7 +69,7 @@ describe("lib/api", () => {
     const dados = await api<unknown[]>("/area", { method: "POST", body: "{}" });
     expect(dados).toEqual([{ idArea: 1 }]);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("http://localhost:8080/area");
+    expect(url).toBe("/api-backend/area");
     expect(init.headers.Authorization).toBe(`Bearer ${token}`);
     expect(init.headers["Content-Type"]).toBe("application/json");
   });
@@ -163,7 +163,7 @@ describe("contratos dos serviços com o backend", () => {
     await buscarUsuario(5);
     await buscarUsuario(5); // cache
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:8080/usuario/5?id=5");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api-backend/usuario/5?id=5");
   });
 
   it("redefinir senha usa PUT", async () => {
@@ -171,7 +171,7 @@ describe("contratos dos serviços com o backend", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { redefinirSenha } = await import("../app/services/usuario.service");
     await redefinirSenha(3, "a", "b");
-    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:8080/usuario/redefinir-senha/3");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api-backend/usuario/redefinir-senha/3");
     expect(fetchMock.mock.calls[0][1].method).toBe("PUT");
   });
 
@@ -183,10 +183,10 @@ describe("contratos dos serviços com o backend", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { buscarContagemCurtidas, buscarStatusCurtida } = await import("../app/services/curtida.service");
     expect(await buscarContagemCurtidas(1, 9)).toBe(4);
-    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:8080/curtida/contar-curtidas/1/9");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api-backend/curtida/contar-curtidas/1/9");
     // Antes o objeto {jaCurtiu:false} era tratado como boolean "true".
     expect(await buscarStatusCurtida(7, 1, 9)).toEqual({ jaCurtiu: false, quantidadeCurtidas: 2 });
-    expect(fetchMock.mock.calls[1][0]).toBe("http://localhost:8080/curtida/status/7/1/9");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api-backend/curtida/status/7/1/9");
   });
 
   it("login guarda o token e rejeita resposta sem token", async () => {

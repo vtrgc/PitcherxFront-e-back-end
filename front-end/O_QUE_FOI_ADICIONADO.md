@@ -93,6 +93,11 @@
 - Administrador não passa pela verificação por código (login, páginas do admin e /auth/verificar-conta)
 - Aviso no admin: conta nova fica inativa até a pessoa confirmar o código do e-mail
 
+## Correções com o backend novo (V25)
+
+- Proxy /api-backend no próprio front (corrige "Não foi possível carregar seus dados" / CORS)
+- Variável BACKEND_URL no .env.example
+
 ## Arquivos novos
 
 - `app/lib/cep.ts`
