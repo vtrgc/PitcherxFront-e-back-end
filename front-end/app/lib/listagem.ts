@@ -29,7 +29,14 @@ export function filtrarPorTermo<T>(itens: T[], termo: string, campos: (item: T) 
   });
 }
 
+/** true quando todas as palavras do termo aparecem em algum dos campos (usado por `CrudAdmin`). */
+export function correspondeBusca(termo: string, ...campos: unknown[]): boolean {
+  return filtrarPorTermo([campos], termo, (c) => c).length > 0;
+}
+
 export const OPCOES_POR_PAGINA = [10, 20, 50] as const;
+/** Mesmo valor de `OPCOES_POR_PAGINA` (nome usado por `components/ui/Paginacao`). */
+export const TAMANHOS_PAGINA = OPCOES_POR_PAGINA;
 export const POR_PAGINA_PADRAO = 10;
 /** Listas em grade do usuário (Projetos, Propostas, Contratos): múltiplos de 2, 3 e 4 colunas. */
 export const OPCOES_POR_PAGINA_GRADE = [12, 24, 48] as const;

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   camposDaFicha,
+  camposFinanceirosApi,
+  combinarFicha,
   lerDescricaoProjeto,
   montarDescricaoProjeto,
   resumoFinanceiro,
@@ -15,13 +17,33 @@ import { normalizarProjeto } from "../app/services/projeto.service";
 import { linkDaPostagem } from "../app/components/PostCard";
 
 describe("ficha financeira do projeto (guardada na descrição)", () => {
-  it("monta e lê de volta sem mostrar o bloco no texto", () => {
-    const descricao = montarDescricaoProjeto("App de entregas.", { meta: 100000, captado: 65000, participacao: 15 });
+  it("monta e lê de volta sem mostrar o bloco no texto (meta/captado/risco ficam fora do bloco)", () => {
+    const descricao = montarDescricaoProjeto("App de entregas.", { meta: 100000, captado: 65000, participacao: 15, risco: "Alto" });
     expect(descricao.startsWith("App de entregas.")).toBe(true);
     const lido = lerDescricaoProjeto(descricao);
     expect(lido.texto).toBe("App de entregas.");
-    expect(lido.ficha).toEqual({ meta: 100000, captado: 65000, participacao: 15 });
+    expect(lido.ficha).toEqual({ participacao: 15 });
     expect(textoDaDescricao(descricao)).toBe("App de entregas.");
+  });
+
+  it("campos financeiros reais do DTO", () => {
+    expect(camposFinanceirosApi({ meta: 100000, captado: 65000, risco: " Médio " })).toEqual({
+      metaFinanceira: 100000,
+      valorArrecadado: 65000,
+      riscoProjeto: "Médio",
+    });
+    expect(camposFinanceirosApi({ meta: 10 })).toEqual({ metaFinanceira: 10, valorArrecadado: null, riscoProjeto: null });
+  });
+
+  it("campos reais têm prioridade sobre o bloco legado", () => {
+    const legado = lerDescricaoProjeto('X\n\n<!--pitcherx:ficha {"v":1,"meta":50,"captado":5,"participacao":10}-->').ficha;
+    expect(combinarFicha({ metaFinanceira: 200, valorArrecadado: 20, riscoProjeto: "Baixo" }, legado)).toEqual({
+      meta: 200,
+      captado: 20,
+      participacao: 10,
+      risco: "Baixo",
+    });
+    expect(combinarFicha({ metaFinanceira: null, valorArrecadado: null }, legado)).toEqual({ meta: 50, captado: 5, participacao: 10 });
   });
 
   it("sem dados financeiros, a descrição fica igual", () => {
@@ -37,7 +59,7 @@ describe("ficha financeira do projeto (guardada na descrição)", () => {
   });
 
   it("texto com '-->' no uso dos recursos não quebra o bloco", () => {
-    const d = montarDescricaoProjeto("X", { meta: 10, usoRecursos: "fase 1 --> fase 2" });
+    const d = montarDescricaoProjeto("X", { usoRecursos: "fase 1 --> fase 2" });
     expect(lerDescricaoProjeto(d).ficha?.usoRecursos).toBe("fase 1 --> fase 2");
   });
 
@@ -68,15 +90,18 @@ describe("ficha financeira do projeto (guardada na descrição)", () => {
     const p = normalizarProjeto({
       idProjeto: 1,
       nomeProjeto: "A",
-      descricaoProjeto: montarDescricaoProjeto("Desc", { meta: 50 }),
+      descricaoProjeto: montarDescricaoProjeto("Desc", { participacao: 5 }),
       dataInicioProjeto: "01/01/2026",
       dataFimProjeto: "01/02/2026",
       tipoProjetoId: 1,
       active: true,
       urlImagemProjeto: null,
+      metaFinanceira: 50,
+      valorArrecadado: null,
+      riscoProjeto: null,
     });
     expect(p.descricaoProjeto).toBe("Desc");
-    expect(p.ficha).toEqual({ meta: 50 });
+    expect(p.ficha).toEqual({ meta: 50, participacao: 5 });
   });
 });
 
@@ -98,9 +123,10 @@ describe("linha do tempo do projeto", () => {
 });
 
 describe("verificação da conta", () => {
-  it("e-mail nunca aparece como verificado (não há confirmação no backend)", () => {
+  it("e-mail verificado = conta ativa (código do cadastro); inativa = pendente", () => {
     const itens = itensVerificacao({ email: "a@a.com", ativo: true, identificador: "529.982.247-25" });
-    expect(itens.find((i) => i.chave === "email")?.status).toBe("nao_verificado");
+    expect(itens.find((i) => i.chave === "email")?.status).toBe("verificado");
+    expect(itensVerificacao({ email: "a@a.com", ativo: false }).find((i) => i.chave === "email")?.status).toBe("pendente");
     expect(itens.find((i) => i.chave === "identidade")?.status).toBe("verificado");
     expect(itens.find((i) => i.chave === "conta")?.status).toBe("verificado");
   });

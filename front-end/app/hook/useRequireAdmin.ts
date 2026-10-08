@@ -23,5 +23,6 @@ export function useRequireAdmin() {
     }
   }, [isLoading, isAuthenticated, isAdmin, router, sessaoExpirada]);
 
+  // A conta de administrador não passa pela verificação por código do cadastro.
   return { usuario, isAdmin, pronto: !isLoading && isAuthenticated && isAdmin };
 }

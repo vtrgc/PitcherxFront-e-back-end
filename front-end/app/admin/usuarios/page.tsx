@@ -292,7 +292,12 @@ export default function AdminUsuariosPage() {
               subtitulo={<span className="break-all">{u.emailUsuario}</span>}
               meta={
                 <>
-                  <span className={u.active ? cls.chipAtivo : cls.chipInativo}>{u.active ? "Ativo" : "Inativo"}</span>
+                  <span
+                    className={u.active ? cls.chipAtivo : cls.chipInativo}
+                    title={u.active ? "Conta ativa" : "Conta desativada ou aguardando a verificação do e-mail (código enviado no cadastro)"}
+                  >
+                    {u.active ? "Ativo" : "Inativo"}
+                  </span>
                   <span className={cls.chip} title={(u.roles ?? []).map((r) => ROLE_LABEL[r] ?? r).join(", ")}>
                     {ROLE_LABEL[principal] ?? principal}
                     {(u.roles ?? []).length > 1 && ` +${u.roles.length - 1}`}
@@ -329,7 +334,7 @@ export default function AdminUsuariosPage() {
       <ModalAdmin
         aberto={cadastro.aberto}
         titulo="Cadastrar usuário"
-        descricao="A conta é criada com o perfil Usuário. Outros perfis podem ser adicionados em Editar."
+        descricao="A conta é criada com o perfil Usuário e fica inativa até a pessoa confirmar o código enviado por e-mail (ou até você ativá-la em Editar). Outros perfis podem ser adicionados em Editar."
         onFechar={cadastro.fechar}
         onSalvar={salvarCadastro}
         salvando={cadastro.salvando}

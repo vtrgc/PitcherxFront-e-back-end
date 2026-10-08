@@ -1,9 +1,14 @@
 /**
- * Ficha financeira do projeto (meta, valor captado, participação oferecida...).
+ * Ficha financeira do projeto (meta, valor captado, risco, participação oferecida...).
  *
- * O `ProjetoRequestDTO`/`ProjetoResponseDTO` do backend NÃO tem campos financeiros. Para que
- * o criador do projeto possa informá-los sem alterar o backend, a ficha é guardada no
- * próprio `descricaoProjeto` (coluna TEXT, sem limite), num bloco no fim do texto:
+ * Campos REAIS do backend (`ProjetoRequestDTO`/`ProjetoResponseDTO`):
+ *  - `metaFinanceira` (obrigatório), `valorArrecadado` e `riscoProjeto`.
+ * O `projeto.service` copia esses campos para `ficha.meta`, `ficha.captado` e `ficha.risco`.
+ *
+ * Complemento sem coluna própria no backend (participação, investimento mínimo e uso dos
+ * recursos) continua guardado no `descricaoProjeto` (coluna TEXT), num bloco no fim do texto.
+ * Projetos antigos também podem ter meta/captado nesse bloco: eles só são usados quando os
+ * campos reais vierem vazios.
  *
  *     Descrição livre do projeto...
  *
@@ -27,7 +32,12 @@ export interface FichaProjeto {
   investimentoMinimo?: number;
   /** Para que o dinheiro será usado (texto livre). */
   usoRecursos?: string;
+  /** Risco do projeto (`riscoProjeto`, VARCHAR(255) no backend). */
+  risco?: string;
 }
+
+/** `risco_projeto` é VARCHAR(255). */
+export const RISCO_MAX = 255;
 
 const PREFIXO = "<!--pitcherx:ficha ";
 const SUFIXO = "-->";
@@ -49,11 +59,13 @@ export function normalizarFicha(f: FichaProjeto | null | undefined): FichaProjet
   const participacao = numeroValido(f.participacao, 100);
   const minimo = numeroValido(f.investimentoMinimo);
   const uso = typeof f.usoRecursos === "string" ? f.usoRecursos.trim().slice(0, USO_RECURSOS_MAX) : "";
+  const risco = typeof f.risco === "string" ? f.risco.trim().slice(0, RISCO_MAX) : "";
   if (meta !== undefined && meta > 0) limpa.meta = meta;
   if (captado !== undefined) limpa.captado = captado;
   if (participacao !== undefined && participacao > 0) limpa.participacao = participacao;
   if (minimo !== undefined && minimo > 0) limpa.investimentoMinimo = minimo;
   if (uso) limpa.usoRecursos = uso;
+  if (risco) limpa.risco = risco;
   return Object.keys(limpa).length > 0 ? limpa : null;
 }
 
@@ -83,14 +95,47 @@ export function textoDaDescricao(descricao: string | null | undefined): string {
   return lerDescricaoProjeto(descricao).texto;
 }
 
-/** Monta o `descricaoProjeto` para a API: texto + ficha (se houver). */
+/**
+ * Monta o `descricaoProjeto` para a API: texto + bloco com o complemento (participação,
+ * investimento mínimo e uso dos recursos). Meta, captado e risco vão nos campos próprios
+ * do DTO (`camposFinanceirosApi`) e não são repetidos no bloco.
+ */
 export function montarDescricaoProjeto(texto: string, ficha: FichaProjeto | null | undefined): string {
-  const limpa = normalizarFicha(ficha);
+  const limpa = normalizarFicha(
+    ficha ? { participacao: ficha.participacao, investimentoMinimo: ficha.investimentoMinimo, usoRecursos: ficha.usoRecursos } : null
+  );
   const corpo = texto.trim();
   if (!limpa) return corpo;
   // "-->" dentro do JSON fecharia o comentário antes da hora.
   const json = JSON.stringify({ v: 1, ...limpa }).replace(/-->/g, "--\\u003e");
   return `${corpo}\n\n${PREFIXO}${json}${SUFIXO}`;
+}
+
+/** Campos financeiros próprios do ProjetoRequestDTO. */
+export function camposFinanceirosApi(ficha: FichaProjeto | null | undefined): {
+  metaFinanceira: number;
+  valorArrecadado: number | null;
+  riscoProjeto: string | null;
+} {
+  return {
+    metaFinanceira: ficha?.meta ?? 0,
+    valorArrecadado: ficha?.captado ?? null,
+    riscoProjeto: ficha?.risco?.trim() || null,
+  };
+}
+
+/**
+ * Junta os campos reais da resposta (`metaFinanceira`, `valorArrecadado`, `riscoProjeto`)
+ * com o complemento lido da descrição. Os campos reais têm prioridade; meta/captado do bloco
+ * só valem para projetos criados antes desses campos existirem.
+ */
+export function combinarFicha(
+  real: { metaFinanceira?: number | null; valorArrecadado?: number | null; riscoProjeto?: string | null },
+  legado: FichaProjeto | null
+): FichaProjeto | null {
+  const meta = typeof real.metaFinanceira === "number" && real.metaFinanceira > 0 ? real.metaFinanceira : legado?.meta;
+  const captado = typeof real.valorArrecadado === "number" ? real.valorArrecadado : legado?.captado;
+  return normalizarFicha({ ...legado, meta, captado, risco: real.riscoProjeto ?? undefined });
 }
 
 // ---------------------------------------------------------------------------
@@ -130,9 +175,10 @@ export interface CamposFicha {
   participacao: string;
   investimentoMinimo: string;
   usoRecursos: string;
+  risco?: string;
 }
 
-export const FICHA_VAZIA: CamposFicha = { meta: "", captado: "", participacao: "", investimentoMinimo: "", usoRecursos: "" };
+export const FICHA_VAZIA: CamposFicha = { meta: "", captado: "", participacao: "", investimentoMinimo: "", usoRecursos: "", risco: "" };
 
 function paraTexto(v: number | undefined) {
   return v === undefined ? "" : v.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2, useGrouping: false });
@@ -146,6 +192,7 @@ export function camposDaFicha(ficha: FichaProjeto | null | undefined): CamposFic
     participacao: paraTexto(ficha.participacao),
     investimentoMinimo: paraTexto(ficha.investimentoMinimo),
     usoRecursos: ficha.usoRecursos ?? "",
+    risco: ficha.risco ?? "",
   };
 }
 
@@ -185,10 +232,11 @@ export function validarCamposFicha(c: CamposFicha): { ficha: FichaProjeto | null
     else participacao = Math.round(n * 100) / 100;
   }
   if (c.usoRecursos.length > USO_RECURSOS_MAX) erros.usoRecursos = `Use no máximo ${USO_RECURSOS_MAX} caracteres.`;
+  if ((c.risco ?? "").trim().length > RISCO_MAX) erros.risco = `Use no máximo ${RISCO_MAX} caracteres.`;
 
   if (Object.keys(erros).length > 0) return { ficha: null, erros };
   return {
-    ficha: normalizarFicha({ meta, captado, participacao, investimentoMinimo: minimo, usoRecursos: c.usoRecursos }),
+    ficha: normalizarFicha({ meta, captado, participacao, investimentoMinimo: minimo, usoRecursos: c.usoRecursos, risco: c.risco }),
     erros,
   };
 }

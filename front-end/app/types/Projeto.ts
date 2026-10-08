@@ -9,6 +9,10 @@ export interface ProjetoRequest {
   dataFimProjeto: string;
   tipoProjetoId: number;
   urlImagemProjeto?: string;
+  /** Obrigatório (@NotNull) no ProjetoRequestDTO. */
+  metaFinanceira: number;
+  valorArrecadado?: number | null;
+  riscoProjeto?: string | null;
 }
 
 export interface Projeto {
@@ -23,6 +27,9 @@ export interface Projeto {
   urlImagemProjeto: string | null;
   /** Galeria (PUT/DELETE /projeto/{id}/imagens, até 10). */
   imagens?: string[] | null;
+  metaFinanceira?: number | null;
+  valorArrecadado?: number | null;
+  riscoProjeto?: string | null;
   /**
    * Preenchido no front (projeto.service): ficha financeira lida do fim da descrição.
    * Quando presente, `descricaoProjeto` já vem só com o texto visível.

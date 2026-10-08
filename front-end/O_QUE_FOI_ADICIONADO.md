@@ -87,6 +87,12 @@
 - Paginação na lista de Contratos
 - Itens "Propostas" e "Perfis profissionais" no menu do admin
 
+## Verificação de conta (backend V25)
+
+- Junção com a versão da main (tela de verificar conta, campos financeiros do projeto)
+- Administrador não passa pela verificação por código (login, páginas do admin e /auth/verificar-conta)
+- Aviso no admin: conta nova fica inativa até a pessoa confirmar o código do e-mail
+
 ## Arquivos novos
 
 - `app/lib/cep.ts`

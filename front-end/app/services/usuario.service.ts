@@ -58,6 +58,21 @@ export async function login(data: LoginRequest) {
   return response;
 }
 
+/**
+ * POST /usuario/verificar-conta — confirma a conta com o código de 6 dígitos enviado por
+ * e-mail no cadastro. A rota NÃO está na lista pública do SecurityConfig: exige o token
+ * (o login funciona mesmo com a conta ainda não verificada). Ao verificar, o backend marca
+ * a conta como verificada e ativa.
+ */
+export async function verificarConta(codigoVerificacao: string) {
+  const usuario = await api<Usuario>("/usuario/verificar-conta", {
+    method: "POST",
+    body: JSON.stringify({ codigoVerificacao }),
+  });
+  invalidarCacheUsuario(usuario?.idUsuario);
+  return usuario;
+}
+
 export function logout() {
   clearToken();
   invalidarCacheUsuario();
