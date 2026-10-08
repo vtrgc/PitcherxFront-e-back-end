@@ -164,6 +164,7 @@ export default function AdminProjetosPage() {
 
   async function alterarTipoVinculo(v: ProjetoUsuario, tipoVinculoId: number, existentes: ProjetoUsuario[]) {
     if (tipoVinculoId === v.tipoVinculoId) return;
+    setErroVinculo("");
     if (existentes.some((x) => x.idProjetoUsuario !== v.idProjetoUsuario && x.usuarioId === v.usuarioId && x.tipoVinculoId === tipoVinculoId)) {
       notificar(`${v.nomeUsuario} já possui esse vínculo com o projeto.`);
       return;
@@ -190,6 +191,7 @@ export default function AdminProjetosPage() {
   }
 
   async function excluirVinculo(v: ProjetoUsuario, existentes: ProjetoUsuario[]) {
+    setErroVinculo("");
     const ultimoCriador = v.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR && existentes.filter((x) => x.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR).length === 1;
     const ok = await confirmar(
       ultimoCriador
@@ -410,7 +412,10 @@ export default function AdminProjetosPage() {
                               <select
                                 id={`vinculo-usuario-${p.idProjeto}`}
                                 value={novoVinculo.usuarioId}
-                                onChange={(e) => setNovoVinculo((n) => ({ ...n, usuarioId: e.target.value }))}
+                                onChange={(e) => {
+                                  setNovoVinculo((n) => ({ ...n, usuarioId: e.target.value }));
+                                  setErroVinculo("");
+                                }}
                                 disabled={usuarios === null}
                                 className={`${cls.input} !bg-white !py-2`}
                               >
@@ -429,7 +434,10 @@ export default function AdminProjetosPage() {
                               <select
                                 id={`vinculo-tipo-${p.idProjeto}`}
                                 value={novoVinculo.tipoVinculoId}
-                                onChange={(e) => setNovoVinculo((n) => ({ ...n, tipoVinculoId: e.target.value }))}
+                                onChange={(e) => {
+                                  setNovoVinculo((n) => ({ ...n, tipoVinculoId: e.target.value }));
+                                  setErroVinculo("");
+                                }}
                                 className={`${cls.input} !bg-white !py-2`}
                               >
                                 <option value="">Selecione</option>
