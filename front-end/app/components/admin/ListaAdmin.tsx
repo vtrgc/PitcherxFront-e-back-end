@@ -61,7 +61,9 @@ export function ListaAdmin({
           <EmptyState
             icon={SearchX}
             title="Nenhum resultado encontrado"
-            description={termo ? `Nada corresponde a "${termo.trim()}". Confira a grafia ou tente outro termo.` : "Ajuste os filtros para ver registros."}
+            description={
+              termo ? `Nada corresponde a "${termo.trim()}". Confira a grafia ou tente outro termo.` : "Ajuste os filtros para ver registros."
+            }
             action={
               onLimparPesquisa ? (
                 <button type="button" onClick={onLimparPesquisa} className={cls.btnSecundario}>
@@ -93,6 +95,7 @@ export function LinhaAdmin({
   rotulo,
   editarDesabilitado = false,
   dicaEditar,
+  detalhe,
 }: {
   titulo: ReactNode;
   subtitulo?: ReactNode;
@@ -107,37 +110,42 @@ export function LinhaAdmin({
   rotulo: string;
   editarDesabilitado?: boolean;
   dicaEditar?: string;
+  /** Conteúdo expandido exibido abaixo da linha (ex.: itens relacionados). */
+  detalhe?: ReactNode;
 }) {
   return (
-    <li className="flex flex-col gap-3 px-4 py-4 transition-colors hover:bg-brand-50/50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-      <div className="flex min-w-0 items-start gap-3">
-        {inicio}
-        <div className="min-w-0">
-          <h3 className="break-words font-display text-[14.5px] font-semibold text-ink-900">{titulo}</h3>
-          {subtitulo && <div className="mt-0.5 line-clamp-2 break-words text-[0.8125rem] text-ink-500">{subtitulo}</div>}
-          {meta && <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{meta}</div>}
+    <li>
+      <div className="flex flex-col gap-3 px-4 py-4 transition-colors hover:bg-brand-50/50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex min-w-0 items-start gap-3">
+          {inicio}
+          <div className="min-w-0">
+            <h3 className="break-words font-display text-[14.5px] font-semibold text-ink-900">{titulo}</h3>
+            {subtitulo && <div className="mt-0.5 line-clamp-2 break-words text-[0.8125rem] text-ink-500">{subtitulo}</div>}
+            {meta && <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{meta}</div>}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
+          {acoes}
+          {onEditar && (
+            <button
+              type="button"
+              onClick={onEditar}
+              disabled={editarDesabilitado}
+              title={dicaEditar ?? "Editar"}
+              aria-label={`Editar ${rotulo}`}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 text-[13px] font-semibold text-ink-700 transition-colors hover:border-brand-300 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Pencil size={14} aria-hidden="true" /> Editar
+            </button>
+          )}
+          {onExcluir && (
+            <button type="button" onClick={onExcluir} className={`${cls.btnIconePerigo} !h-9 !w-9`} title="Excluir" aria-label={`Excluir ${rotulo}`}>
+              <Trash2 size={16} />
+            </button>
+          )}
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
-        {acoes}
-        {onEditar && (
-          <button
-            type="button"
-            onClick={onEditar}
-            disabled={editarDesabilitado}
-            title={dicaEditar ?? "Editar"}
-            aria-label={`Editar ${rotulo}`}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 text-[13px] font-semibold text-ink-700 transition-colors hover:border-brand-300 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Pencil size={14} aria-hidden="true" /> Editar
-          </button>
-        )}
-        {onExcluir && (
-          <button type="button" onClick={onExcluir} className={`${cls.btnIconePerigo} !h-9 !w-9`} title="Excluir" aria-label={`Excluir ${rotulo}`}>
-            <Trash2 size={16} />
-          </button>
-        )}
-      </div>
+      {detalhe}
     </li>
   );
 }

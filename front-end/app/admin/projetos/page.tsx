@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Briefcase, Trash2, ChevronDown, ExternalLink, Users2 } from "lucide-react";
+import { Briefcase, Trash2, ChevronDown, ExternalLink, Users2, Plus, Loader2 } from "lucide-react";
 
 import BarraPesquisaAdmin from "../../components/admin/BarraPesquisaAdmin";
 import CabecalhoAdmin from "../../components/admin/CabecalhoAdmin";
@@ -17,11 +17,13 @@ import ImagemRemota from "../../components/ImagemRemota";
 import { useFeedback } from "../../components/ui/FeedbackProvider";
 import { Projeto } from "../../types/Projeto";
 import { TipoProjeto } from "../../types/TipoProjeto";
-import { ProjetoUsuario } from "../../types/ProjetoUsuario";
+import { ProjetoUsuario, TIPOS_VINCULO, TIPO_VINCULO_ID } from "../../types/ProjetoUsuario";
+import { Usuario } from "../../types/Usuario";
 import { listarProjetos, excluirProjeto } from "../../services/projeto.service";
 import { listarContratos } from "../../services/contrato.service";
 import { listarTiposProjeto } from "../../services/tipoProjeto.service";
-import { listarPorProjeto } from "../../services/projetoUsuario.service";
+import { listarPorProjeto, vincularUsuario, atualizarVinculo, removerVinculo } from "../../services/projetoUsuario.service";
+import { listarUsuarios, obterRolePrincipal } from "../../services/usuario.service";
 
 export default function AdminProjetosPage() {
   const { pronto } = useRequireAdmin();
@@ -38,6 +40,10 @@ export default function AdminProjetosPage() {
   const [expandidoId, setExpandidoId] = useState<number | null>(null);
   const { notificar, confirmar } = useFeedback();
   const [vinculos, setVinculos] = useState<Record<number, ProjetoUsuario[] | "carregando" | "erro">>({});
+  const [usuarios, setUsuarios] = useState<Usuario[] | null>(null);
+  const [novoVinculo, setNovoVinculo] = useState<{ usuarioId: string; tipoVinculoId: string }>({ usuarioId: "", tipoVinculoId: "" });
+  const [erroVinculo, setErroVinculo] = useState("");
+  const [salvandoVinculo, setSalvandoVinculo] = useState<number | "novo" | null>(null);
 
   async function carregar() {
     setLoading(true);
@@ -104,6 +110,14 @@ export default function AdminProjetosPage() {
       return;
     }
     setExpandidoId(id);
+    setNovoVinculo({ usuarioId: "", tipoVinculoId: "" });
+    setErroVinculo("");
+    if (usuarios === null) {
+      // Lista para o seletor "Adicionar vínculo" (contas de administrador não participam de projetos).
+      listarUsuarios()
+        .then((lista) => setUsuarios((lista ?? []).filter((u) => obterRolePrincipal(u.roles) !== "ADMIN").sort((a, b) => a.nomeUsuario.localeCompare(b.nomeUsuario))))
+        .catch(() => setUsuarios([]));
+    }
     if (vinculos[id] && vinculos[id] !== "erro") return;
 
     setVinculos((atual) => ({ ...atual, [id]: "carregando" }));
@@ -112,6 +126,87 @@ export default function AdminProjetosPage() {
       setVinculos((atual) => ({ ...atual, [id]: dados }));
     } catch {
       setVinculos((atual) => ({ ...atual, [id]: "erro" }));
+    }
+  }
+
+  function atualizarListaVinculos(projetoId: number, alterar: (atual: ProjetoUsuario[]) => ProjetoUsuario[]) {
+    setVinculos((atual) => {
+      const lista = atual[projetoId];
+      return Array.isArray(lista) ? { ...atual, [projetoId]: alterar(lista) } : atual;
+    });
+  }
+
+  async function adicionarVinculo(projetoId: number, existentes: ProjetoUsuario[]) {
+    const usuarioId = Number(novoVinculo.usuarioId);
+    const tipoVinculoId = Number(novoVinculo.tipoVinculoId);
+    if (!usuarioId || !tipoVinculoId) {
+      setErroVinculo("Selecione o usuário e o tipo de vínculo.");
+      return;
+    }
+    // A checagem de duplicidade do backend compara os parâmetros na ordem errada; conferimos aqui.
+    if (existentes.some((v) => v.usuarioId === usuarioId && v.tipoVinculoId === tipoVinculoId)) {
+      setErroVinculo("Este usuário já possui esse vínculo com o projeto.");
+      return;
+    }
+    setErroVinculo("");
+    setSalvandoVinculo("novo");
+    try {
+      const criado = await vincularUsuario({ projetoId, usuarioId, tipoVinculoId });
+      atualizarListaVinculos(projetoId, (lista) => [...lista, criado]);
+      setNovoVinculo({ usuarioId: "", tipoVinculoId: "" });
+      notificar("Vínculo adicionado.", "sucesso");
+    } catch (error) {
+      setErroVinculo(mensagemErro(error, "Não foi possível adicionar o vínculo."));
+    } finally {
+      setSalvandoVinculo(null);
+    }
+  }
+
+  async function alterarTipoVinculo(v: ProjetoUsuario, tipoVinculoId: number, existentes: ProjetoUsuario[]) {
+    if (tipoVinculoId === v.tipoVinculoId) return;
+    if (existentes.some((x) => x.idProjetoUsuario !== v.idProjetoUsuario && x.usuarioId === v.usuarioId && x.tipoVinculoId === tipoVinculoId)) {
+      notificar(`${v.nomeUsuario} já possui esse vínculo com o projeto.`);
+      return;
+    }
+    const criadores = existentes.filter((x) => x.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR);
+    if (v.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR && criadores.length === 1) {
+      const ok = await confirmar(`${v.nomeUsuario} é o único criador registrado. Ao mudar o vínculo, o projeto ficará sem dono identificado.`, {
+        titulo: "Alterar vínculo",
+        perigo: true,
+        confirmarLabel: "Alterar",
+      });
+      if (!ok) return;
+    }
+    setSalvandoVinculo(v.idProjetoUsuario);
+    try {
+      const atualizado = await atualizarVinculo(v.idProjetoUsuario, { projetoId: v.projetoId, usuarioId: v.usuarioId, tipoVinculoId });
+      atualizarListaVinculos(v.projetoId, (lista) => lista.map((x) => (x.idProjetoUsuario === v.idProjetoUsuario ? atualizado : x)));
+      notificar("Vínculo atualizado.", "sucesso");
+    } catch (error) {
+      notificar(mensagemErro(error, "Não foi possível alterar o vínculo."));
+    } finally {
+      setSalvandoVinculo(null);
+    }
+  }
+
+  async function excluirVinculo(v: ProjetoUsuario, existentes: ProjetoUsuario[]) {
+    const ultimoCriador = v.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR && existentes.filter((x) => x.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR).length === 1;
+    const ok = await confirmar(
+      ultimoCriador
+        ? `Remover ${v.nomeUsuario}? Ele é o único criador registrado — o projeto ficará sem dono identificado.`
+        : `Remover o vínculo de ${v.nomeUsuario} com este projeto?`,
+      { titulo: "Remover vínculo", perigo: true, confirmarLabel: "Remover" }
+    );
+    if (!ok) return;
+    setSalvandoVinculo(v.idProjetoUsuario);
+    try {
+      await removerVinculo(v.idProjetoUsuario);
+      atualizarListaVinculos(v.projetoId, (lista) => lista.filter((x) => x.idProjetoUsuario !== v.idProjetoUsuario));
+      notificar("Vínculo removido.", "sucesso");
+    } catch (error) {
+      notificar(mensagemErro(error, "Não foi possível remover o vínculo."));
+    } finally {
+      setSalvandoVinculo(null);
     }
   }
 
@@ -124,7 +219,7 @@ export default function AdminProjetosPage() {
       <CabecalhoAdmin
         icone={Briefcase}
         titulo="Projetos"
-        descricao="Visualização e moderação. Projetos são criados e editados pelos próprios usuários: a API não permite que a conta de administrador cadastre ou edite projetos."
+        descricao="Moderação de projetos e dos vínculos (criador, sócio, investidor, visualizador). Projetos são criados e editados pelos próprios usuários: a API não permite que a conta de administrador cadastre ou edite projetos."
         total={loading ? null : projetos.length}
         rotuloTotal={["projeto", "projetos"]}
       />
@@ -229,7 +324,7 @@ export default function AdminProjetosPage() {
                         onClick={() => alternarVinculos(p.idProjeto)}
                         aria-expanded={expandidoId === p.idProjeto}
                         className="inline-flex h-[2.35rem] w-[2.35rem] items-center justify-center rounded-full text-ink-500 transition-colors hover:-translate-y-px hover:bg-brand-50 hover:text-brand-700 active:scale-[0.92]"
-                        title="Ver vínculos"
+                        title="Ver e gerenciar vínculos"
                         aria-label={`Ver vínculos do projeto ${p.nomeProjeto}`}
                       >
                         <ChevronDown size={16} className={`transition-transform ${expandidoId === p.idProjeto ? "rotate-180" : ""}`} />
@@ -256,24 +351,106 @@ export default function AdminProjetosPage() {
                       </p>
                       {vinculo === "carregando" ? (
                         <p className="text-[12.5px] text-ink-400">Carregando vínculos…</p>
-                      ) : vinculo === "erro" ? (
+                      ) : vinculo === "erro" || !vinculo ? (
                         <p className="text-[12.5px] text-ink-400">Não foi possível carregar os vínculos deste projeto.</p>
-                      ) : !vinculo || vinculo.length === 0 ? (
-                        <p className="text-[12.5px] text-ink-400">Nenhum vínculo registrado para este projeto.</p>
                       ) : (
-                        <ul className="grid gap-2 sm:grid-cols-2">
-                          {vinculo.map((v) => (
-                            <li key={v.idProjetoUsuario} className="flex items-center justify-between gap-2 rounded-lg border border-ink-100 bg-white px-3 py-2">
-                              <div className="min-w-0">
-                                <p className="truncate text-[12.5px] font-semibold text-ink-800">{v.nomeUsuario}</p>
-                                <p className="text-[10.5px] text-ink-400">desde {formatarData(v.dataVinculo)}</p>
-                              </div>
-                              <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-700">
-                                {v.nomeTipoVinculo}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
+                        <>
+                          {vinculo.length === 0 ? (
+                            <p className="text-[12.5px] text-ink-400">Nenhum vínculo registrado para este projeto.</p>
+                          ) : (
+                            <ul className="grid gap-2 sm:grid-cols-2">
+                              {vinculo.map((v) => (
+                                <li key={v.idProjetoUsuario} className="flex items-center justify-between gap-2 rounded-lg border border-ink-100 bg-white px-3 py-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-[12.5px] font-semibold text-ink-800">{v.nomeUsuario}</p>
+                                    <p className="text-[10.5px] text-ink-400">desde {formatarData(v.dataVinculo)}</p>
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-1.5">
+                                    <select
+                                      aria-label={`Tipo de vínculo de ${v.nomeUsuario}`}
+                                      value={v.tipoVinculoId}
+                                      disabled={salvandoVinculo === v.idProjetoUsuario}
+                                      onChange={(e) => alterarTipoVinculo(v, Number(e.target.value), vinculo)}
+                                      className={`${cls.input} !w-auto !bg-white !py-1 !text-[12px]`}
+                                    >
+                                      {TIPOS_VINCULO.map((t) => (
+                                        <option key={t.id} value={t.id}>
+                                          {t.rotulo}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <button
+                                      type="button"
+                                      onClick={() => excluirVinculo(v, vinculo)}
+                                      disabled={salvandoVinculo === v.idProjetoUsuario}
+                                      className={`${cls.btnIconePerigo} !h-8 !w-8`}
+                                      aria-label={`Remover vínculo de ${v.nomeUsuario}`}
+                                      title="Remover vínculo"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+
+                          <form
+                            noValidate
+                            className="mt-3 flex flex-col gap-2 border-t border-ink-100 pt-3 sm:flex-row sm:items-end"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              adicionarVinculo(p.idProjeto, vinculo);
+                            }}
+                          >
+                            <div className="sm:flex-1">
+                              <label htmlFor={`vinculo-usuario-${p.idProjeto}`} className={cls.label}>
+                                Usuário
+                              </label>
+                              <select
+                                id={`vinculo-usuario-${p.idProjeto}`}
+                                value={novoVinculo.usuarioId}
+                                onChange={(e) => setNovoVinculo((n) => ({ ...n, usuarioId: e.target.value }))}
+                                disabled={usuarios === null}
+                                className={`${cls.input} !bg-white !py-2`}
+                              >
+                                <option value="">{usuarios === null ? "Carregando usuários…" : "Selecione"}</option>
+                                {(usuarios ?? []).map((u) => (
+                                  <option key={u.idUsuario} value={u.idUsuario}>
+                                    {u.nomeUsuario} — {u.emailUsuario}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="sm:w-44">
+                              <label htmlFor={`vinculo-tipo-${p.idProjeto}`} className={cls.label}>
+                                Tipo de vínculo
+                              </label>
+                              <select
+                                id={`vinculo-tipo-${p.idProjeto}`}
+                                value={novoVinculo.tipoVinculoId}
+                                onChange={(e) => setNovoVinculo((n) => ({ ...n, tipoVinculoId: e.target.value }))}
+                                className={`${cls.input} !bg-white !py-2`}
+                              >
+                                <option value="">Selecione</option>
+                                {TIPOS_VINCULO.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.rotulo}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <button type="submit" disabled={salvandoVinculo === "novo"} className={`${cls.btnPrimario} !py-2 !text-[13px]`}>
+                              {salvandoVinculo === "novo" ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                              Adicionar vínculo
+                            </button>
+                          </form>
+                          {erroVinculo && (
+                            <p className="mt-2 text-[12.5px] text-red-600" role="alert">
+                              {erroVinculo}
+                            </p>
+                          )}
+                        </>
                       )}
                     </div>
                   )}

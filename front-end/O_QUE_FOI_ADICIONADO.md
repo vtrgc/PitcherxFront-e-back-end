@@ -73,6 +73,20 @@
 - Filtros "Curtidas e comentários" e "Conexões" na página de Notificações
 - Botão "Ver publicação" / "Ver projeto" em cada notificação
 
+## Auditoria front-end × back-end
+
+- Página admin "Perfis profissionais" (pesquisar, filtrar, cadastrar, editar, excluir, remover capa)
+- Página admin "Propostas" (pesquisar, filtrar, cadastrar, editar, excluir)
+- Exclusão de contrapropostas pelo admin
+- Gerenciar vínculos de projeto no admin (adicionar, alterar tipo, remover)
+- Alterar tipo de vínculo de um membro na equipe do projeto
+- Remover informações profissionais (Editar perfil)
+- Desativar conta (Configurações)
+- Paginação na lista de Projetos
+- Paginação na lista de Propostas
+- Paginação na lista de Contratos
+- Itens "Propostas" e "Perfis profissionais" no menu do admin
+
 ## Arquivos novos
 
 - `app/lib/cep.ts`
@@ -107,3 +121,7 @@
 - `app/components/NotificacaoAtividadeCard.tsx`
 - `tests/atividade.test.ts`
 - `RELATORIO_GRUPO10.md`
+- `app/admin/perfis/page.tsx`
+- `app/admin/propostas/page.tsx`
+- `app/hook/usePaginacao.ts`
+- `RELATORIO_AUDITORIA.md`

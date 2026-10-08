@@ -5,6 +5,8 @@ import Link from "next/link";
 import { HandCoins, Plus, Pencil, Trash2, ChevronRight } from "lucide-react";
 
 import PageShell from "../components/PageShell";
+import Paginacao from "../components/admin/Paginacao";
+import { usePaginacao } from "../hook/usePaginacao";
 import EmptyState from "../components/EmptyState";
 import FormValorDescricao from "../components/FormValorDescricao";
 import SearchBar from "../components/SearchBar";
@@ -54,6 +56,7 @@ export default function PropostasPage() {
     const termo = busca.trim().toLowerCase();
     return termo ? propostas.filter((p) => p.descricaoProposta.toLowerCase().includes(termo)) : propostas;
   }, [propostas, busca]);
+  const paginacao = usePaginacao(visiveis, busca.trim(), 10);
 
   async function salvar(descricao: string, valor: number | null) {
     const payload = { descricaoProposta: descricao, valorProposta: valor };
@@ -145,46 +148,51 @@ export default function PropostasPage() {
           />
         </div>
       ) : (
-        <ul>
-          {visiveis.map((proposta) => (
-            <li key={proposta.idProposta} className={`${cls.linha} flex items-start justify-between gap-3`}>
-              <Link href={`/propostas/${proposta.idProposta}`} className="group min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={cls.chip}>#{proposta.idProposta}</span>
-                  <span className="text-[14px] font-bold text-ink-900">{formatarMoeda(proposta.valorProposta)}</span>
-                </div>
-                <p className={`${cls.texto} mt-2 line-clamp-3 break-words`}>{proposta.descricaoProposta}</p>
-                <span className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-brand-700 group-hover:underline">
-                  Ver contra-propostas
-                  <ChevronRight size={14} aria-hidden="true" />
-                </span>
-              </Link>
+        <>
+          <ul>
+            {paginacao.itens.map((proposta) => (
+              <li key={proposta.idProposta} className={`${cls.linha} flex items-start justify-between gap-3`}>
+                <Link href={`/propostas/${proposta.idProposta}`} className="group min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={cls.chip}>#{proposta.idProposta}</span>
+                    <span className="text-[14px] font-bold text-ink-900">{formatarMoeda(proposta.valorProposta)}</span>
+                  </div>
+                  <p className={`${cls.texto} mt-2 line-clamp-3 break-words`}>{proposta.descricaoProposta}</p>
+                  <span className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-brand-700 group-hover:underline">
+                    Ver contra-propostas
+                    <ChevronRight size={14} aria-hidden="true" />
+                  </span>
+                </Link>
 
-              <div className="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditando(proposta);
-                    setMostrarForm(true);
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                  className={cls.btnIcone}
-                  aria-label={`Editar proposta ${proposta.idProposta}`}
-                >
-                  <Pencil size={15} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => excluir(proposta)}
-                  className={cls.btnIconePerigo}
-                  aria-label={`Excluir proposta ${proposta.idProposta}`}
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditando(proposta);
+                      setMostrarForm(true);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className={cls.btnIcone}
+                    aria-label={`Editar proposta ${proposta.idProposta}`}
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => excluir(proposta)}
+                    className={cls.btnIconePerigo}
+                    aria-label={`Excluir proposta ${proposta.idProposta}`}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className={`${cls.card} mt-6 overflow-hidden [&>nav]:border-t-0`}>
+            <Paginacao {...paginacao} onPagina={paginacao.irPara} onPorPagina={paginacao.setPorPagina} rotuloItens="propostas" />
+          </div>
+        </>
       )}
     </PageShell>
   );

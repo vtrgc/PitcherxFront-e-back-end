@@ -31,6 +31,8 @@ export function filtrarPorTermo<T>(itens: T[], termo: string, campos: (item: T) 
 
 export const OPCOES_POR_PAGINA = [10, 20, 50] as const;
 export const POR_PAGINA_PADRAO = 10;
+/** Listas em grade do usuário (Projetos, Propostas, Contratos): múltiplos de 2, 3 e 4 colunas. */
+export const OPCOES_POR_PAGINA_GRADE = [12, 24, 48] as const;
 
 export interface FatiaPaginada<T> {
   itens: T[];

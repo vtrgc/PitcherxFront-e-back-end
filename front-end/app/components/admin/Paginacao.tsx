@@ -17,6 +17,7 @@ export default function Paginacao({
   onPagina,
   onPorPagina,
   rotuloItens = "registros",
+  opcoesPorPagina = OPCOES_POR_PAGINA,
 }: {
   pagina: number;
   totalPaginas: number;
@@ -27,6 +28,7 @@ export default function Paginacao({
   onPagina: (p: number) => void;
   onPorPagina?: (n: number) => void;
   rotuloItens?: string;
+  opcoesPorPagina?: readonly number[];
 }) {
   if (total === 0) return null;
   const ir = (p: number) => {
@@ -54,7 +56,7 @@ export default function Paginacao({
               onChange={(e) => onPorPagina(Number(e.target.value))}
               className="rounded-lg border border-ink-200 bg-white px-2 py-1 text-[12.5px] font-semibold text-ink-800 outline-none focus:border-brand-500"
             >
-              {OPCOES_POR_PAGINA.map((n) => (
+              {opcoesPorPagina.map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>
