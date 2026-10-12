@@ -17,6 +17,8 @@ import {
   Activity,
   IdCard,
   HandCoins,
+  AlertTriangle,
+  UserPlus,
 } from "lucide-react";
 
 
@@ -25,10 +27,12 @@ export const SECOES_ADMIN = [
   { href: "/admin/usuarios", titulo: "Usuários", icon: Users },
   { href: "/admin/perfis", titulo: "Perfis profissionais", icon: IdCard },
   { href: "/admin/projetos", titulo: "Projetos", icon: Briefcase },
+  { href: "/admin/solicitacoes", titulo: "Solicitações de vínculo", icon: UserPlus },
   { href: "/admin/postagens", titulo: "Postagens", icon: FileText },
   { href: "/admin/propostas", titulo: "Propostas", icon: HandCoins },
   { href: "/admin/interacoes", titulo: "Interações", icon: Activity },
   { href: "/admin/tipos-projeto", titulo: "Tipos de projeto", icon: Tags },
+  { href: "/admin/riscos", titulo: "Riscos de projeto", icon: AlertTriangle },
   { href: "/admin/areas", titulo: "Áreas", icon: LayoutGrid },
   { href: "/admin/subareas", titulo: "Subáreas", icon: LayoutGrid },
   { href: "/admin/especialidades", titulo: "Especialidades", icon: Award },

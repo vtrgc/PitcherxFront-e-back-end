@@ -1,8 +1,13 @@
 "use client";
 
-import { AlertTriangle, CircleDollarSign, PieChart, Target, TrendingUp, Wallet } from "lucide-react";
-import { FichaProjeto, resumoFinanceiro } from "../../lib/fichaProjeto";
+import { useState } from "react";
+import { AlertTriangle, CircleDollarSign, Loader2, PieChart, RefreshCw, Save, Target, TrendingUp, Wallet, X } from "lucide-react";
+import { FichaProjeto, VALOR_MAXIMO, resumoFinanceiro } from "../../lib/fichaProjeto";
 import { formatarPercentual } from "../../lib/perfil";
+import { parseValorMonetario } from "../../lib/validacao";
+import { mensagemErro } from "../../lib/api";
+import { RiscoProjeto } from "../../types/RiscoProjeto";
+import Alerta from "../ui/Alerta";
 import { cls } from "../ui/estilos";
 
 function moeda(v: number) {
@@ -10,19 +15,27 @@ function moeda(v: number) {
 }
 
 /**
- * Meta financeira, progresso da captação, participação oferecida e uso dos recursos.
+ * Meta financeira, progresso da captação, riscos, participação oferecida e uso dos recursos.
  * Mostra SOMENTE o que o criador informou (ficha do projeto); o restante aparece como
  * "não informado" — nenhum valor é estimado.
+ *
+ * `onAtualizarValores` (criador): atualiza meta e valor arrecadado pelos PATCH próprios do
+ * backend, sem reenviar o projeto inteiro.
  */
 export default function PainelFinanceiro({
   ficha,
+  riscos,
   podeEditar,
   onEditar,
+  onAtualizarValores,
 }: {
   ficha: FichaProjeto | null | undefined;
+  riscos?: RiscoProjeto[] | null;
   podeEditar: boolean;
   onEditar?: () => void;
+  onAtualizarValores?: (valores: { meta?: number; captado?: number }) => Promise<void>;
 }) {
+  const [atualizando, setAtualizando] = useState(false);
   const r = resumoFinanceiro(ficha);
   const temFinanceiro = r.meta !== null || r.captado !== null || !!ficha?.investimentoMinimo;
   const participacao = ficha?.participacao ?? null;
@@ -30,9 +43,20 @@ export default function PainelFinanceiro({
   return (
     <div className="space-y-6">
       <section className={`${cls.card} p-5 sm:p-6`} aria-labelledby="titulo-meta">
-        <h2 id="titulo-meta" className={cls.eyebrow}>
-          <Target size={14} aria-hidden="true" /> Meta financeira
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="titulo-meta" className={cls.eyebrow}>
+            <Target size={14} aria-hidden="true" /> Meta financeira
+          </h2>
+          {podeEditar && onAtualizarValores && !atualizando && (
+            <button type="button" onClick={() => setAtualizando(true)} className={`${cls.btnContorno} !py-1.5 !text-[12.5px]`}>
+              <RefreshCw size={13} aria-hidden="true" /> Atualizar captação
+            </button>
+          )}
+        </div>
+
+        {atualizando && onAtualizarValores && (
+          <FormValores meta={r.meta} captado={r.captado} onSalvar={onAtualizarValores} onFechar={() => setAtualizando(false)} />
+        )}
 
         {temFinanceiro ? (
           <>
@@ -85,15 +109,23 @@ export default function PainelFinanceiro({
           <SemDados texto="O criador ainda não informou a meta financeira deste projeto." podeEditar={podeEditar} onEditar={onEditar} />
         )}
 
-        {ficha?.risco && (
-          <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
-            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
-            <div className="min-w-0">
-              <h3 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-amber-700">Risco do projeto</h3>
-              <p className="mt-0.5 whitespace-pre-line break-words text-[14px] leading-6 text-ink-800">{ficha.risco}</p>
-            </div>
-          </div>
-        )}
+        <div className="mt-5 border-t border-ink-100 pt-4">
+          <h3 className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-amber-700">
+            <AlertTriangle size={13} aria-hidden="true" /> Riscos do projeto
+          </h3>
+          {riscos && riscos.length > 0 ? (
+            <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+              {riscos.map((risco) => (
+                <li key={risco.idRiscoProjeto} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                  <p className="text-[13.5px] font-semibold text-ink-900">{risco.nomeRisco}</p>
+                  {risco.descricaoRisco && <p className="mt-0.5 text-[12.5px] leading-5 text-ink-600">{risco.descricaoRisco}</p>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1 text-[13px] text-ink-500">Nenhum risco informado pelo criador.</p>
+          )}
+        </div>
 
         {ficha?.usoRecursos && (
           <div className="mt-5 border-t border-ink-100 pt-4">
@@ -171,5 +203,109 @@ function SemDados({ texto, podeEditar, onEditar }: { texto: string; podeEditar: 
         </button>
       )}
     </div>
+  );
+}
+
+function paraTexto(v: number | null) {
+  return v === null ? "" : v.toLocaleString("pt-BR", { maximumFractionDigits: 2, useGrouping: false });
+}
+
+function lerValor(texto: string): number | null | "invalido" {
+  let bruto = texto.replace(/R\$\s*/i, "").trim();
+  if (!bruto) return null;
+  if (/^\d{1,3}(\.\d{3})+$/.test(bruto)) bruto = bruto.replace(/\./g, "");
+  const v = parseValorMonetario(bruto);
+  if (v === null) return null;
+  if (Number.isNaN(v) || v < 0 || v > VALOR_MAXIMO) return "invalido";
+  return v;
+}
+
+function FormValores({
+  meta,
+  captado,
+  onSalvar,
+  onFechar,
+}: {
+  meta: number | null;
+  captado: number | null;
+  onSalvar: (valores: { meta?: number; captado?: number }) => Promise<void>;
+  onFechar: () => void;
+}) {
+  const [textoMeta, setTextoMeta] = useState(paraTexto(meta));
+  const [textoCaptado, setTextoCaptado] = useState(paraTexto(captado));
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  async function salvar() {
+    const novaMeta = lerValor(textoMeta);
+    const novoCaptado = lerValor(textoCaptado);
+    if (novaMeta === "invalido" || novoCaptado === "invalido") {
+      setErro("Informe valores válidos (ex.: 150000 ou 150.000,00).");
+      return;
+    }
+    if (novaMeta === null || novaMeta <= 0) {
+      setErro("A meta financeira é obrigatória e deve ser maior que zero.");
+      return;
+    }
+    const valores: { meta?: number; captado?: number } = {};
+    if (novaMeta !== meta) valores.meta = novaMeta;
+    if (novoCaptado !== null && novoCaptado !== captado) valores.captado = novoCaptado;
+    if (valores.meta === undefined && valores.captado === undefined) {
+      onFechar();
+      return;
+    }
+    setErro("");
+    setSalvando(true);
+    try {
+      await onSalvar(valores);
+      onFechar();
+    } catch (error) {
+      setErro(mensagemErro(error, "Não foi possível atualizar os valores."));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <form
+      noValidate
+      className="mt-4 rounded-xl border border-brand-100 bg-brand-50/40 p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!salvando) salvar();
+      }}
+    >
+      {erro && <Alerta className="mb-3">{erro}</Alerta>}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label htmlFor="patch-meta" className={cls.label}>
+            Meta financeira (R$)
+          </label>
+          <input id="patch-meta" inputMode="decimal" value={textoMeta} maxLength={24} onChange={(e) => setTextoMeta(e.target.value)} className={cls.input} />
+        </div>
+        <div>
+          <label htmlFor="patch-captado" className={cls.label}>
+            Valor arrecadado (R$)
+          </label>
+          <input
+            id="patch-captado"
+            inputMode="decimal"
+            value={textoCaptado}
+            maxLength={24}
+            onChange={(e) => setTextoCaptado(e.target.value)}
+            className={cls.input}
+          />
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="submit" disabled={salvando} className={`${cls.btnPrimario} !text-[13px]`}>
+          {salvando ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} aria-hidden="true" />}
+          Salvar valores
+        </button>
+        <button type="button" onClick={onFechar} disabled={salvando} className={`${cls.btnSecundario} !text-[13px]`}>
+          <X size={15} aria-hidden="true" /> Cancelar
+        </button>
+      </div>
+    </form>
   );
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Briefcase, Plus, Calendar, ChevronRight } from "lucide-react";
+import { Briefcase, Plus, Calendar, ChevronRight, Lock } from "lucide-react";
 
 import PageShell from "../components/PageShell";
 import Paginacao from "../components/ui/Paginacao";
@@ -22,13 +22,13 @@ import { useAuth } from "../context/AuthContext";
 import { mensagemErro } from "../lib/api";
 import { Projeto, ProjetoRequest } from "../types/Projeto";
 import { TipoProjeto } from "../types/TipoProjeto";
-import { TIPO_VINCULO_ID } from "../types/ProjetoUsuario";
 import { listarProjetos, criarProjeto, buscarProjetos, substituirImagensProjeto } from "../services/projeto.service";
 import { apiDateToInput } from "../lib/date";
 import { listarTiposProjeto } from "../services/tipoProjeto.service";
-import { listarIdsProjetosCriados, vincularUsuario } from "../services/projetoUsuario.service";
+import { listarPorUsuario } from "../services/projetoUsuario.service";
+import { ProjetoUsuario, TIPO_VINCULO_ID } from "../types/ProjetoUsuario";
 
-type Filtro = "todos" | "meus";
+type Filtro = "todos" | "meus" | "participando";
 
 /** Lista e criação de projetos (usuários comuns; o administrador usa /admin/projetos). */
 export default function ProjetosPage() {
@@ -40,6 +40,9 @@ export default function ProjetosPage() {
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [tipos, setTipos] = useState<TipoProjeto[]>([]);
   const [meus, setMeus] = useState<Set<number>>(new Set());
+  // Projetos em que a pessoa tem vínculo sem ser criadora (aceitou os termos, sócio, investidor).
+  const [participando, setParticipando] = useState<Set<number>>(new Set());
+  const [vinculosCarregados, setVinculosCarregados] = useState(false);
   const [loading, setLoading] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [erroCarregamento, setErroCarregamento] = useState("");
@@ -57,14 +60,17 @@ export default function ProjetosPage() {
     setLoading(true);
     setErroCarregamento("");
     try {
-      const [listaProjetos, listaTipos, idsMeus] = await Promise.all([
+      const [listaProjetos, listaTipos, vinculos] = await Promise.all([
         listarProjetos(),
         listarTiposProjeto().catch(() => [] as TipoProjeto[]),
-        listarIdsProjetosCriados(idUsuario).catch(() => new Set<number>()),
+        listarPorUsuario(idUsuario).catch(() => null as ProjetoUsuario[] | null),
       ]);
       setProjetos([...(listaProjetos ?? [])].sort((a, b) => b.idProjeto - a.idProjeto));
       setTipos(listaTipos ?? []);
-      setMeus(idsMeus);
+      const criados = new Set((vinculos ?? []).filter((v) => v.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR).map((v) => v.projetoId));
+      setMeus(criados);
+      setParticipando(new Set((vinculos ?? []).map((v) => v.projetoId).filter((id) => !criados.has(id))));
+      setVinculosCarregados(vinculos !== null);
     } catch (error) {
       setErroCarregamento(mensagemErro(error, "Não foi possível carregar os projetos."));
     } finally {
@@ -120,8 +126,10 @@ export default function ProjetosPage() {
 
   const visiveis = useMemo(() => {
     const base = filtroAtivo && resultadoBusca ? resultadoBusca : projetos;
-    return base.filter((p) => filtro === "todos" || meus.has(p.idProjeto));
-  }, [projetos, resultadoBusca, filtroAtivo, filtro, meus]);
+    if (filtro === "meus") return base.filter((p) => meus.has(p.idProjeto));
+    if (filtro === "participando") return base.filter((p) => participando.has(p.idProjeto));
+    return base;
+  }, [projetos, resultadoBusca, filtroAtivo, filtro, meus, participando]);
   const paginacao = usePaginacao(visiveis, { tamanhoInicial: 12, chaveReinicio: `${filtro}|${filtroAtivo}|${busca}|${dataDe}|${dataAte}` });
 
   function limparFiltros() {
@@ -134,32 +142,16 @@ export default function ProjetosPage() {
 
   async function publicarProjeto(dados: ProjetoRequest, arquivos: File[]) {
     if (!usuario) return;
-    const criado = await criarProjeto(dados);
-    // O backend não associa o projeto ao autor automaticamente: registramos o
-    // vínculo CRIADOR, que é o que identifica o dono do projeto.
-    let vinculado = false;
-    try {
-      await vincularUsuario({
-        projetoId: criado.idProjeto,
-        usuarioId: usuario.idUsuario,
-        tipoVinculoId: TIPO_VINCULO_ID.CRIADOR,
-      });
-      vinculado = true;
-    } catch (error) {
-      notificar(
-        `Projeto criado, mas não foi possível registrar você como criador: ${mensagemErro(error)}`,
-        "erro"
-      );
-    }
-    // PUT /projeto/{id}/imagens só é aceito para quem está vinculado ao projeto.
-    if (arquivos.length > 0 && vinculado) {
+    // POST /projeto/{idUsuario}: o backend já registra quem publicou como CRIADOR.
+    const criado = await criarProjeto(usuario.idUsuario, dados);
+    if (arquivos.length > 0) {
       try {
         await substituirImagensProjeto(criado.idProjeto, arquivos);
         notificar("Projeto publicado.", "sucesso");
       } catch (error) {
         notificar(`Projeto publicado, mas as imagens não foram salvas: ${mensagemErro(error)} Adicione-as na página do projeto.`, "erro");
       }
-    } else if (vinculado) {
+    } else {
       notificar("Projeto publicado.", "sucesso");
     }
     setMostrarForm(false);
@@ -236,6 +228,7 @@ export default function ProjetosPage() {
           [
             { id: "todos", rotulo: `Todos (${projetos.length})` },
             { id: "meus", rotulo: `Meus projetos (${meus.size})` },
+            { id: "participando", rotulo: `Participando (${participando.size})` },
           ] as const
         ).map(({ id, rotulo }) => (
           <button
@@ -266,9 +259,19 @@ export default function ProjetosPage() {
           <EmptyState
             icon={Briefcase}
             title={
-              filtroAtivo ? "Nenhum projeto encontrado" : filtro === "meus" ? "Você ainda não criou projetos" : "Nenhum projeto publicado ainda"
+              filtroAtivo ? "Nenhum projeto encontrado" : filtro === "meus"
+                  ? "Você ainda não criou projetos"
+                  : filtro === "participando"
+                    ? "Você ainda não participa de outros projetos"
+                    : "Nenhum projeto publicado ainda"
             }
-            description={filtroAtivo ? "Tente outro termo ou período." : "Use o botão “Novo projeto” para publicar o primeiro."}
+            description={
+              filtroAtivo
+                ? "Tente outro termo ou período."
+                : filtro === "participando"
+                  ? "Abra um projeto e aceite os termos de vínculo para acompanhá-lo."
+                  : "Use o botão “Novo projeto” para publicar o primeiro."
+            }
           />
         </div>
       ) : (
@@ -287,8 +290,15 @@ export default function ProjetosPage() {
                 >
                   {ROTULO_SITUACAO[linhaDoTempo(projeto).situacao]}
                 </span>
-                {meus.has(projeto.idProjeto) && (
+                {meus.has(projeto.idProjeto) ? (
                   <span className={`${cls.chip} absolute left-3 top-3 shadow-soft`}>Seu projeto</span>
+                ) : (
+                  vinculosCarregados &&
+                  !participando.has(projeto.idProjeto) && (
+                    <span className={`${cls.chipInativo} absolute left-3 top-3 shadow-soft`} title="Aceite os termos de vínculo para ver todos os detalhes">
+                      <Lock size={11} aria-hidden="true" /> Termos pendentes
+                    </span>
+                  )
                 )}
               </div>
 

@@ -1,3 +1,11 @@
+/**
+ * Endereço do PitcherX-BackEnd usado pelo proxy /backend (lido no build e no `next start`).
+ * O navegador chama /backend/... na mesma origem do front-end e o Next repassa ao backend:
+ * assim as chamadas não dependem de CORS (o SecurityConfig atual do backend não aplica a
+ * configuração de CORS e recusa com 403 o preflight das rotas autenticadas).
+ */
+const BACKEND_URL = (process.env.BACKEND_URL || "http://localhost:8080").replace(/\/+$/, "");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -12,6 +20,9 @@ const nextConfig = {
         hostname: "images.unsplash.com",
       },
     ],
+  },
+  async rewrites() {
+    return [{ source: "/backend/:path*", destination: `${BACKEND_URL}/:path*` }];
   },
   async headers() {
     return [

@@ -22,6 +22,7 @@ import {
   Tag,
   Tags,
   ArrowRight,
+  UserPlus,
 } from "lucide-react";
 
 import { useRequireAdmin } from "../hook/useRequireAdmin";
@@ -48,14 +49,16 @@ const ACOES_RAPIDAS = [
   { href: "/admin/projetos", titulo: "Projetos", descricao: "Visualizar e moderar projetos", icon: Briefcase },
   { href: "/admin/postagens", titulo: "Postagens", descricao: "Visualizar e moderar postagens", icon: FileText },
   { href: "/admin/interacoes", titulo: "Interações", descricao: "Comentários, curtidas e vínculos", icon: Activity },
+  { href: "/admin/solicitacoes", titulo: "Solicitações de vínculo", descricao: "Pedidos para entrar como sócio ou investidor", icon: UserPlus },
   { href: "/admin/tipos-projeto", titulo: "Tipos de projeto", descricao: "Categorias de projeto", icon: Tags },
+  { href: "/admin/riscos", titulo: "Riscos de projeto", descricao: "Catálogo de riscos dos projetos", icon: AlertTriangle },
   { href: "/admin/areas", titulo: "Áreas", descricao: "Grandes áreas de atuação", icon: LayoutGrid },
   { href: "/admin/subareas", titulo: "Subáreas", descricao: "Subdivisões das áreas", icon: LayoutGrid },
   { href: "/admin/especialidades", titulo: "Especialidades", descricao: "Especialidades de usuários", icon: Award },
   { href: "/admin/enderecos", titulo: "Endereços", descricao: "Endereços cadastrados", icon: Home },
   { href: "/admin/termos", titulo: "Termos de contrato", descricao: "Cláusulas de contratos", icon: FileSignature },
   { href: "/admin/termos-postagem", titulo: "Termos de postagem", descricao: "Regras de postagens", icon: Tag },
-  { href: "/admin/termos-vinculo", titulo: "Termos de vínculo", descricao: "Tipos de vínculo em projetos", icon: Link2 },
+  { href: "/admin/termos-vinculo", titulo: "Termos de vínculo", descricao: "Condições de acesso definidas por projeto", icon: Link2 },
 ];
 
 export default function AdminDashboard() {

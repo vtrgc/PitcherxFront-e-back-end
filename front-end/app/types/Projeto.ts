@@ -1,5 +1,6 @@
 
 import type { FichaProjeto } from "../lib/fichaProjeto";
+import type { RiscoProjeto } from "./RiscoProjeto";
 
 export interface ProjetoRequest {
   nomeProjeto: string;
@@ -12,7 +13,8 @@ export interface ProjetoRequest {
   /** Obrigatório (@NotNull) no ProjetoRequestDTO. */
   metaFinanceira: number;
   valorArrecadado?: number | null;
-  riscoProjeto?: string | null;
+  /** IDs do catálogo GET /risco-projeto (@NotNull: envie [] quando não houver riscos). */
+  riscoProjetoIds: number[];
 }
 
 export interface Projeto {
@@ -29,7 +31,7 @@ export interface Projeto {
   imagens?: string[] | null;
   metaFinanceira?: number | null;
   valorArrecadado?: number | null;
-  riscoProjeto?: string | null;
+  riscos?: RiscoProjeto[] | null;
   /**
    * Preenchido no front (projeto.service): ficha financeira lida do fim da descrição.
    * Quando presente, `descricaoProjeto` já vem só com o texto visível.

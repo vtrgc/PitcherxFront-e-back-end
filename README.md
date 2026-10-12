@@ -7,5 +7,5 @@
 
 1. Banco: em `back-end/`, `docker compose up -d` (Postgres na porta 5433, pgAdmin em http://localhost:5050).
 2. Back-end: crie `back-end/.env` a partir de `back-end/.env-exemple` e rode a aplicação.
-3. Front-end: em `front-end/`, `npm install` e `npm run dev`. A API padrão é `http://localhost:8080`
-   (para outro endereço, defina `NEXT_PUBLIC_API_URL` em `front-end/.env.local`).
+3. Front-end: em `front-end/`, `npm install` e `npm run dev`. O front chama `/backend/...` e o Next repassa para
+   `http://localhost:8080` (para outro endereço, defina `BACKEND_URL` em `front-end/.env.local`).

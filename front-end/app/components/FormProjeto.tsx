@@ -10,7 +10,6 @@ import { mensagemErro } from "../lib/api";
 import {
   CamposFicha,
   ErrosFicha,
-  RISCO_MAX,
   USO_RECURSOS_MAX,
   camposDaFicha,
   camposFinanceirosApi,
@@ -22,14 +21,16 @@ import { TipoProjeto } from "../types/TipoProjeto";
 import { cls } from "./ui/estilos";
 import Alerta from "./ui/Alerta";
 import SeletorImagens from "./SeletorImagens";
+import SeletorRiscos from "./projeto/SeletorRiscos";
 
 /**
  * Formulário de projeto (criação e edição). Replica as validações do ProjetoRequestDTO:
  * nome/descrição obrigatórios, início hoje ou futuro, término futuro e tipo obrigatório.
  *
- * Dados financeiros: `metaFinanceira` (obrigatória), `valorArrecadado` e `riscoProjeto` são
- * campos do DTO. Participação, investimento mínimo e uso dos recursos são opcionais e, por não
- * terem coluna no backend, ficam no fim da descrição (ver lib/fichaProjeto) sem aparecer no texto.
+ * Dados financeiros: `metaFinanceira` (obrigatória) e `valorArrecadado` são campos do DTO;
+ * os riscos vêm do catálogo (`riscoProjetoIds`, obrigatório mesmo vazio). Participação,
+ * investimento mínimo e uso dos recursos são opcionais e, por não terem coluna no backend,
+ * ficam no fim da descrição (ver lib/fichaProjeto) sem aparecer no texto.
  *
  * Imagens: na criação, o usuário pode escolher arquivos (enviados depois por
  * PUT /projeto/{id}/imagens) ou informar uma URL. Na edição, a galeria é gerenciada na
@@ -58,6 +59,7 @@ export default function FormProjeto({
   const [arquivos, setArquivos] = useState<File[]>([]);
   const [ficha, setFicha] = useState<CamposFicha>(() => camposDaFicha(projeto?.ficha));
   const [errosFicha, setErrosFicha] = useState<ErrosFicha>({});
+  const [riscoIds, setRiscoIds] = useState<number[]>(() => (projeto?.riscos ?? []).map((r) => r.idRiscoProjeto));
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -107,6 +109,7 @@ export default function FormProjeto({
         tipoProjetoId: Number(tipoProjetoId),
         urlImagemProjeto: edicao ? undefined : urlImagem.trim() || undefined,
         ...camposFinanceirosApi(financeiro.ficha),
+        riscoProjetoIds: riscoIds,
       }, edicao ? [] : arquivos);
     } catch (error) {
       setErro(mensagemErro(error, "Não foi possível salvar o projeto."));
@@ -217,8 +220,8 @@ export default function FormProjeto({
             <CircleDollarSign size={15} aria-hidden="true" /> Dados financeiros
           </legend>
           <p className="mb-3 text-[12.5px] text-ink-500">
-            Aparecem na página do projeto (meta, progresso da captação, risco e participação oferecida). A meta é obrigatória; deixe
-            em branco o restante que não quiser divulgar.
+            Aparecem na página do projeto (meta, progresso da captação e participação oferecida). A meta é obrigatória; deixe em
+            branco o restante que não quiser divulgar.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <CampoFicha
@@ -254,21 +257,6 @@ export default function FormProjeto({
               onChange={(v) => setFicha((f) => ({ ...f, investimentoMinimo: v }))}
             />
             <div className="sm:col-span-2">
-              <label htmlFor="proj-ficha-risco" className={cls.label}>
-                Risco do projeto
-              </label>
-              <input
-                id="proj-ficha-risco"
-                value={ficha.risco ?? ""}
-                maxLength={RISCO_MAX}
-                onChange={(e) => setFicha((f) => ({ ...f, risco: e.target.value }))}
-                placeholder="Ex.: Médio — depende de aprovação regulatória"
-                aria-invalid={!!errosFicha.risco}
-                className={cls.input}
-              />
-              {errosFicha.risco && <p className="mt-1 text-[13px] text-red-600">{errosFicha.risco}</p>}
-            </div>
-            <div className="sm:col-span-2">
               <label htmlFor="proj-ficha-uso" className={cls.label}>
                 Uso dos recursos
               </label>
@@ -285,6 +273,11 @@ export default function FormProjeto({
               {errosFicha.usoRecursos && <p className="mt-1 text-[13px] text-red-600">{errosFicha.usoRecursos}</p>}
             </div>
           </div>
+        </fieldset>
+
+        <fieldset className="md:col-span-2 rounded-xl border border-ink-100 p-4" disabled={salvando}>
+          <legend className="sr-only">Riscos do projeto</legend>
+          <SeletorRiscos selecionados={riscoIds} onChange={setRiscoIds} desabilitado={salvando} />
         </fieldset>
 
         {!edicao && (

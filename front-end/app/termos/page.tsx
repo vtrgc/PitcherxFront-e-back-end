@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Link2, ScrollText, Tag } from "lucide-react";
 
 import PageShell, { CarregandoSessao } from "../components/PageShell";
@@ -11,17 +12,21 @@ import { cls } from "../components/ui/estilos";
 import { mensagemErro } from "../lib/api";
 import { listarTermosPostagem } from "../services/termoPostagem.service";
 import { listarTermosVinculo } from "../services/termoVinculo.service";
+import { listarProjetos } from "../services/projeto.service";
 
 type Aba = "postagem" | "vinculo";
 interface Item {
   id: number;
   titulo: string;
   descricao: string;
+  projeto?: { id: number; nome: string } | null;
+  obrigatorio?: boolean;
 }
 
 /**
  * Termos da plataforma (somente leitura): regras de publicação (GET /termo-postagem) e
- * condições de vínculo a projetos (GET /termo-vinculo). A gestão fica na área administrativa.
+ * condições de vínculo a projetos (GET /termo-vinculo). Os termos de vínculo pertencem a cada
+ * projeto: o criador os define na página do projeto e quem quer acessá-lo precisa aceitá-los.
  */
 export default function TermosPage() {
   return (
@@ -45,10 +50,23 @@ function Termos() {
     setCarregando(true);
     setErro("");
     try {
-      const [postagem, vinculo] = await Promise.all([listarTermosPostagem(), listarTermosVinculo()]);
+      const [postagem, vinculo, projetos] = await Promise.all([
+        listarTermosPostagem(),
+        listarTermosVinculo(),
+        listarProjetos().catch(() => []),
+      ]);
+      const nomes = new Map(projetos.map((p) => [p.idProjeto, p.nomeProjeto]));
       setItens({
         postagem: (postagem ?? []).map((t) => ({ id: t.idTermoPostagem, titulo: t.tituloTermoPostagem, descricao: t.descricaoTermoPostagem })),
-        vinculo: (vinculo ?? []).map((t) => ({ id: t.idTermoVinculo, titulo: t.tituloTermoVinculo, descricao: t.descricaoTermoVinculo })),
+        vinculo: (vinculo ?? [])
+          .map((t) => ({
+            id: t.idTermoVinculo,
+            titulo: t.tituloTermoVinculo,
+            descricao: t.descricaoTermoVinculo,
+            obrigatorio: !!t.obrigatorio,
+            projeto: t.projetoId ? { id: t.projetoId, nome: nomes.get(t.projetoId) ?? `Projeto #${t.projetoId}` } : null,
+          }))
+          .sort((a, b) => (a.projeto?.nome ?? "").localeCompare(b.projeto?.nome ?? "", "pt-BR") || a.id - b.id),
       });
     } catch (error) {
       setErro(mensagemErro(error, "Não foi possível carregar os termos."));
@@ -94,6 +112,12 @@ function Termos() {
         ))}
       </div>
 
+      {abaAtiva === "vinculo" && (
+        <Alerta variante="info">
+          Cada projeto define os próprios termos de vínculo. Para acessar um projeto, abra a página dele e aceite os termos obrigatórios.
+        </Alerta>
+      )}
+
       {erro && <Alerta onTentarNovamente={carregar}>{erro}</Alerta>}
 
       <div role="tabpanel" className={`${cls.card} overflow-hidden`}>
@@ -111,6 +135,18 @@ function Termos() {
                 <h2 className="font-display text-[15.5px] font-bold text-ink-900 break-words">
                   {i + 1}. {t.titulo}
                 </h2>
+                {t.projeto !== undefined && (
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-[12.5px] text-ink-500">
+                    {t.projeto ? (
+                      <Link href={`/projetos/${t.projeto.id}`} className="font-semibold text-brand-700 hover:underline">
+                        {t.projeto.nome}
+                      </Link>
+                    ) : (
+                      "Termo geral"
+                    )}
+                    <span className={t.obrigatorio ? cls.chip : cls.chipInativo}>{t.obrigatorio ? "Obrigatório" : "Opcional"}</span>
+                  </p>
+                )}
                 <p className="mt-1.5 whitespace-pre-line break-words text-[14px] leading-relaxed text-ink-600">{t.descricao}</p>
               </li>
             ))}
