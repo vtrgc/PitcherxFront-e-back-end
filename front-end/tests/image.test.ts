@@ -7,7 +7,7 @@ describe("URLs vindas de dados do usuário", () => {
     expect(isValidImageUrl("/uploads/a.png")).toBe(true);
     expect(isValidImageUrl("//evil.com/a.png")).toBe(false);
     expect(isValidImageUrl("javascript:alert(1)")).toBe(false);
-    expect(resolverUrlImagem("/uploads/a.png")).toBe("http://localhost:8080/uploads/a.png");
+    expect(resolverUrlImagem("/uploads/a.png")).toBe("/api-backend/uploads/a.png");
     expect(resolverUrlImagem("")).toBeNull();
   });
 

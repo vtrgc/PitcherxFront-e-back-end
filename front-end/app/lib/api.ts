@@ -9,7 +9,12 @@
  *  - Erros seguem o formato do GlobalExceptionHandler: { message, errorCode, errors?, timestamp }.
  */
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080").replace(/\/+$/, "");
+/**
+ * Prefixo das chamadas à API. É um caminho do próprio front: o `next.config.js` repassa
+ * `/api-backend/*` para o backend (BACKEND_URL / NEXT_PUBLIC_API_URL). Chamar o backend
+ * direto do navegador esbarra no CORS (o preflight das requisições com token recebe 403).
+ */
+export const API_URL = "/api-backend";
 
 /** Tempo máximo de espera de uma requisição antes de desistir (ms). */
 const TIMEOUT_PADRAO_MS = 20000;

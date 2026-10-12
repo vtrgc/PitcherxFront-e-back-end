@@ -2,20 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Power, Trash2, ShieldCheck, UserPlus, Loader2, ExternalLink, X } from "lucide-react";
+import { ExternalLink, Loader2, Power, ShieldCheck } from "lucide-react";
 
-import EmptyState from "../../components/EmptyState";
-import Paginacao from "../../components/ui/Paginacao";
-import { usePaginacao } from "../../hook/usePaginacao";
+import BarraPesquisaAdmin from "../../components/admin/BarraPesquisaAdmin";
+import CabecalhoAdmin from "../../components/admin/CabecalhoAdmin";
+import { CampoAdmin, LinhaAdmin, ListaAdmin } from "../../components/admin/ListaAdmin";
+import ModalAdmin from "../../components/admin/ModalAdmin";
+import Paginacao from "../../components/admin/Paginacao";
 import Alerta from "../../components/ui/Alerta";
 import Avatar from "../../components/ui/Avatar";
 import { cls } from "../../components/ui/estilos";
 import { useFeedback } from "../../components/ui/FeedbackProvider";
+import { useListagemAdmin } from "../../hook/useListagemAdmin";
+import { useModalCadastro } from "../../hook/useModalCadastro";
 import { useRequireAdmin } from "../../hook/useRequireAdmin";
 import { mensagemErro } from "../../lib/api";
+import { ErrosCadastro, SENHA_MINIMA, somenteDigitos, validarCadastro } from "../../lib/validacao";
 import { Usuario } from "../../types/Usuario";
 import {
   listarUsuarios,
+  cadastrarUsuario,
   ativarDesativarUsuario,
   excluirUsuario,
   adicionarRoleUsuario,
@@ -26,6 +32,14 @@ import {
 
 type FiltroStatus = "todos" | "ativos" | "inativos";
 
+/**
+ * Usuários.
+ * - Cadastrar: POST /usuario/cadastro-usuario (nome, e-mail, senha, telefone opcional) —
+ *   a conta nasce com o perfil USUARIO, como no cadastro público.
+ * - Editar: status (PUT /usuario/ativar-desativar/{id}) e perfis (POST /usuario/alterar-role,
+ *   que só ADICIONA). Nome, e-mail e telefone não são editados aqui: o PUT /usuario/{id} do
+ *   backend grava a senha recebida sem criptografia e bloquearia o acesso do usuário.
+ */
 export default function AdminUsuariosPage() {
   const { pronto, usuario: admin } = useRequireAdmin();
   const { notificar, confirmar } = useFeedback();
@@ -33,12 +47,22 @@ export default function AdminUsuariosPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState("");
-  const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("todos");
   const [filtroRole, setFiltroRole] = useState("");
   const [processandoId, setProcessandoId] = useState<number | null>(null);
 
-  const [gerenciando, setGerenciando] = useState<Usuario | null>(null);
+  // Cadastro
+  const cadastro = useModalCadastro<Usuario>();
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [senha, setSenha] = useState("");
+  const [confirmarSenha, setConfirmarSenha] = useState("");
+  const [errosCadastro, setErrosCadastro] = useState<ErrosCadastro>({});
+
+  // Edição (status + perfis)
+  const edicao = useModalCadastro<Usuario>();
+  const [ativo, setAtivo] = useState(true);
   const [roleNova, setRoleNova] = useState("");
 
   const carregar = useCallback(async () => {
@@ -57,9 +81,94 @@ export default function AdminUsuariosPage() {
     if (pronto) carregar();
   }, [pronto, carregar]);
 
+  const filtradosPorStatus = useMemo(
+    () =>
+      usuarios.filter(
+        (u) =>
+          (filtroStatus === "todos" || (filtroStatus === "ativos" ? u.active : !u.active)) && (!filtroRole || (u.roles ?? []).includes(filtroRole))
+      ),
+    [usuarios, filtroStatus, filtroRole]
+  );
+  const lista = useListagemAdmin(filtradosPorStatus, (u) => [u.nomeUsuario, u.emailUsuario, u.telefoneUsuario, ...(u.roles ?? []).map((r) => ROLE_LABEL[r] ?? r)]);
+
+  // ------------------------------------------------------------------ cadastro
+  function abrirCadastro() {
+    setNome("");
+    setEmail("");
+    setTelefone("");
+    setSenha("");
+    setConfirmarSenha("");
+    setErrosCadastro({});
+    cadastro.abrirNovo();
+  }
+
+  function salvarCadastro() {
+    cadastro.salvar({
+      validar: () => {
+        const erros = validarCadastro({ nome, email, senha, confirmarSenha, telefone });
+        if (!erros.email && usuarios.some((u) => u.emailUsuario.toLowerCase() === email.trim().toLowerCase())) erros.email = "Já existe um usuário com esse e-mail.";
+        setErrosCadastro(erros);
+        return Object.keys(erros).length > 0 ? "Revise os campos destacados." : null;
+      },
+      enviar: () =>
+        cadastrarUsuario({
+          nomeUsuario: nome.trim(),
+          emailUsuario: email.trim().toLowerCase(),
+          senhaUsuario: senha,
+          // telefone_usuario é VARCHAR(13): só dígitos.
+          telefoneUsuario: somenteDigitos(telefone) || undefined,
+        }),
+      sucesso: "Usuário cadastrado.",
+      falha: "Não foi possível cadastrar o usuário.",
+      depois: carregar,
+    });
+  }
+
+  // ------------------------------------------------------------------ edição
+  function abrirEdicao(u: Usuario) {
+    setAtivo(u.active);
+    setRoleNova("");
+    edicao.abrirEdicao(u);
+  }
+
+  async function salvarEdicao() {
+    const u = edicao.registro;
+    if (!u) return;
+    const mudouStatus = ativo !== u.active;
+    if (!mudouStatus && !roleNova) {
+      edicao.setErro("Nenhuma alteração para salvar.");
+      return;
+    }
+    if (roleNova) {
+      const irreversivel = "O servidor não possui endpoint para remover perfis: esta ação não pode ser desfeita pela interface.";
+      const msg =
+        roleNova === "ADMIN"
+          ? `Conceder acesso de ADMINISTRADOR a "${u.nomeUsuario}"? ${irreversivel}`
+          : `Adicionar o perfil ${ROLE_LABEL[roleNova]} a "${u.nomeUsuario}"? ${irreversivel}`;
+      if (!(await confirmar(msg, { titulo: "Adicionar perfil", confirmarLabel: "Adicionar", perigo: roleNova === "ADMIN" }))) return;
+    }
+    edicao.salvar({
+      enviar: async () => {
+        if (mudouStatus) await ativarDesativarUsuario(u.idUsuario);
+        if (roleNova) await adicionarRoleUsuario(u.idUsuario, ROLE_ID_MAP[roleNova]);
+      },
+      sucesso: roleNova ? "Usuário atualizado. Para o novo perfil valer, o usuário precisa entrar novamente." : "Usuário atualizado.",
+      falha: "Não foi possível salvar as alterações.",
+      depois: carregar,
+    });
+  }
+
+  // ------------------------------------------------------------------ ações rápidas
   async function toggleAtivo(u: Usuario) {
     const acao = u.active ? "desativar" : "ativar";
-    if (!(await confirmar(`Deseja ${acao} a conta de "${u.nomeUsuario}"?`, { titulo: u.active ? "Desativar conta" : "Ativar conta", confirmarLabel: u.active ? "Desativar" : "Ativar", perigo: u.active }))) return;
+    if (
+      !(await confirmar(`Deseja ${acao} a conta de "${u.nomeUsuario}"?`, {
+        titulo: u.active ? "Desativar conta" : "Ativar conta",
+        confirmarLabel: u.active ? "Desativar" : "Ativar",
+        perigo: u.active,
+      }))
+    )
+      return;
     setProcessandoId(u.idUsuario);
     try {
       await ativarDesativarUsuario(u.idUsuario);
@@ -81,257 +190,280 @@ export default function AdminUsuariosPage() {
       await carregar();
     } catch (error) {
       notificar(
-        mensagemErro(
-          error,
-          "Não foi possível excluir este usuário. Contas com curtidas, endereços ou outros registros vinculados podem ser recusadas pelo servidor."
-        )
+        mensagemErro(error, "Não foi possível excluir este usuário. Contas com curtidas, endereços ou outros registros vinculados podem ser recusadas pelo servidor.")
       );
     } finally {
       setProcessandoId(null);
     }
   }
 
-  async function adicionarRole() {
-    if (!gerenciando || !roleNova) return;
-    const irreversivel = "O servidor não possui endpoint para remover perfis: esta ação não pode ser desfeita pela interface.";
-    const mensagem =
-      roleNova === "ADMIN"
-        ? `Conceder acesso de ADMINISTRADOR a "${gerenciando.nomeUsuario}"? ${irreversivel}`
-        : `Adicionar o perfil ${ROLE_LABEL[roleNova]} a "${gerenciando.nomeUsuario}"? ${irreversivel}`;
-    if (!(await confirmar(mensagem, { titulo: "Adicionar perfil", confirmarLabel: "Adicionar", perigo: roleNova === "ADMIN" }))) return;
-
-    setProcessandoId(gerenciando.idUsuario);
-    try {
-      await adicionarRoleUsuario(gerenciando.idUsuario, ROLE_ID_MAP[roleNova]);
-      notificar("Perfil adicionado. O usuário precisa entrar novamente para a mudança valer.", "sucesso");
-      setGerenciando(null);
-      setRoleNova("");
-      await carregar();
-    } catch (error) {
-      notificar(mensagemErro(error, "Não foi possível adicionar o perfil."));
-    } finally {
-      setProcessandoId(null);
-    }
-  }
-
-  const filtrados = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return usuarios.filter(
-      (u) =>
-        (!termo || u.nomeUsuario.toLowerCase().includes(termo) || u.emailUsuario.toLowerCase().includes(termo)) &&
-        (filtroStatus === "todos" || (filtroStatus === "ativos" ? u.active : !u.active)) &&
-        (!filtroRole || (u.roles ?? []).includes(filtroRole))
-    );
-  }, [usuarios, busca, filtroStatus, filtroRole]);
-  const paginacao = usePaginacao(filtrados, { chaveReinicio: `${busca}|${filtroStatus}|${filtroRole}` });
-
   if (!pronto) {
     return <div className={`${cls.skeleton} h-24 w-full rounded-2xl`} />;
   }
 
-  const rolesDisponiveis = gerenciando ? Object.keys(ROLE_ID_MAP).filter((r) => !(gerenciando.roles ?? []).includes(r)) : [];
+  const emEdicao = edicao.registro;
+  const rolesDisponiveis = emEdicao ? Object.keys(ROLE_ID_MAP).filter((r) => !(emEdicao.roles ?? []).includes(r)) : [];
+  const campoErro = (campo: keyof ErrosCadastro) =>
+    errosCadastro[campo] ? { "aria-invalid": true, "aria-describedby": `usr-${campo}-erro` } : {};
 
   return (
     <>
-      <div className={`${cls.card} p-4 sm:p-5`}>
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-            <ShieldCheck size={19} aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="font-display text-[17px] font-bold text-ink-900">Usuários</h1>
-            <p className="text-[0.8125rem] text-ink-500 mt-0.5">
-              {usuarios.length} usuário{usuarios.length === 1 ? "" : "s"} cadastrado{usuarios.length === 1 ? "" : "s"}. Nome,
-              e-mail e telefone são editados pelo próprio usuário; aqui o administrador gerencia status e perfis. Contas novas ficam
-              inativas até o usuário confirmar o código enviado por e-mail.
-            </p>
-          </div>
-        </div>
-      </div>
+      <CabecalhoAdmin
+        icone={ShieldCheck}
+        titulo="Usuários"
+        descricao="Contas da plataforma: cadastro, status e perfis de acesso."
+        total={loading ? null : usuarios.length}
+        rotuloTotal={["usuário", "usuários"]}
+        onCadastrar={abrirCadastro}
+      />
 
-      {gerenciando && (
-        <section className={`${cls.card} p-5 sm:p-6`} aria-labelledby="titulo-perfis">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 id="titulo-perfis" className={cls.h2}>
-                Perfis de {gerenciando.nomeUsuario}
-              </h2>
-              <p className={`${cls.textoSuave} mt-1`}>
-                O backend apenas <strong>adiciona</strong> perfis (POST /usuario/alterar-role); não há como remover um perfil
-                já concedido.
-              </p>
-            </div>
-            <button type="button" onClick={() => setGerenciando(null)} className={cls.btnIcone} aria-label="Fechar">
-              <X size={16} />
-            </button>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {(gerenciando.roles ?? []).map((r) => (
-              <span key={r} className={cls.chip}>
-                {ROLE_LABEL[r] ?? r}
-              </span>
-            ))}
-          </div>
-
-          {rolesDisponiveis.length === 0 ? (
-            <p className={`${cls.textoSuave} mt-4`}>Este usuário já possui todos os perfis.</p>
-          ) : (
-            <div className="mt-5 flex flex-wrap items-end gap-3">
-              <div>
-                <label htmlFor="role-nova" className={cls.label}>
-                  Adicionar perfil
-                </label>
-                <select id="role-nova" value={roleNova} onChange={(e) => setRoleNova(e.target.value)} className={`${cls.input} !w-auto !bg-white`}>
-                  <option value="">Selecione</option>
-                  {rolesDisponiveis.map((r) => (
-                    <option key={r} value={r}>
-                      {ROLE_LABEL[r] ?? r}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="button"
-                onClick={adicionarRole}
-                disabled={!roleNova || processandoId === gerenciando.idUsuario}
-                className={cls.btnPrimario}
-              >
-                {processandoId === gerenciando.idUsuario ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
-                Adicionar
-              </button>
-            </div>
-          )}
-        </section>
-      )}
-
-      <div className={`${cls.card} flex flex-wrap items-center gap-3 p-3`}>
-        <div className="flex h-11 min-w-[200px] flex-1 items-center gap-2.5 rounded-lg border border-ink-200 bg-ink-25 px-3.5 focus-within:border-brand-500 focus-within:bg-white">
-          <Search size={17} className="shrink-0 text-brand-500" aria-hidden="true" />
-          <label htmlFor="busca-usuarios" className="sr-only">
-            Buscar usuários
-          </label>
-          <input
-            id="busca-usuarios"
-            type="search"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por nome ou e-mail"
-            className="h-full w-full min-w-0 bg-transparent text-[14px] outline-none placeholder:text-ink-400"
-          />
-        </div>
-        <select aria-label="Filtrar por status" value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value as FiltroStatus)} className={`${cls.input} !w-auto !py-2.5 !bg-white`}>
-          <option value="todos">Todos os status</option>
-          <option value="ativos">Somente ativos</option>
-          <option value="inativos">Somente inativos</option>
-        </select>
-        <select aria-label="Filtrar por perfil" value={filtroRole} onChange={(e) => setFiltroRole(e.target.value)} className={`${cls.input} !w-auto !py-2.5 !bg-white`}>
-          <option value="">Todos os perfis</option>
-          {Object.keys(ROLE_ID_MAP).map((r) => (
-            <option key={r} value={r}>
-              {ROLE_LABEL[r]}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {erroCarregamento && !loading && <Alerta onTentarNovamente={carregar}>{erroCarregamento}</Alerta>}
-
-      <div className={`${cls.card} overflow-hidden`}>
-        {loading ? (
-          <div className="space-y-3 p-6" aria-label="Carregando usuários">
-            <div className={`${cls.skeleton} h-5 w-full rounded-lg`} />
-            <div className={`${cls.skeleton} h-5 w-4/5 rounded-lg`} />
-            <div className={`${cls.skeleton} h-5 w-3/5 rounded-lg`} />
-          </div>
-        ) : erroCarregamento ? null : filtrados.length === 0 ? (
-          <EmptyState icon={ShieldCheck} title="Nenhum usuário encontrado" />
-        ) : (
+      <BarraPesquisaAdmin
+        valor={lista.termo}
+        onChange={lista.setTermo}
+        placeholder="Pesquisar por nome, e-mail ou telefone..."
+        rotulo="Pesquisar usuários"
+        resultado={`${lista.total} resultado${lista.total === 1 ? "" : "s"}`}
+        filtros={
           <>
-          <ul className="divide-y divide-ink-100">
-            {paginacao.itens.map((u) => {
-              const ehVoce = u.idUsuario === admin?.idUsuario;
-              const ocupado = processandoId === u.idUsuario;
-              return (
-                <li key={u.idUsuario} className="flex flex-col gap-3 px-4 py-4 transition-colors hover:bg-brand-50/60 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <Avatar url={u.urlImagemUsuario} nome={u.nomeUsuario} tamanho={38} />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate text-[14.5px] font-semibold text-ink-900">{u.nomeUsuario}</h3>
-                        {ehVoce && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10.5px] font-bold text-brand-700">você</span>}
-                      </div>
-                      <p className="truncate text-[0.8125rem] text-ink-500">{u.emailUsuario}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-                    <span
-                      className={u.active ? cls.chipAtivo : cls.chipInativo}
-                      title={u.active ? "Conta ativa" : "Conta desativada ou aguardando a verificação do e-mail (código enviado no cadastro)"}
-                    >
-                      {u.active ? "Ativo" : "Inativo"}
-                    </span>
-                    <span className={cls.chip} title={(u.roles ?? []).join(", ")}>
-                      {ROLE_LABEL[obterRolePrincipal(u.roles)] ?? obterRolePrincipal(u.roles)}
-                      {(u.roles ?? []).length > 1 && ` +${u.roles.length - 1}`}
-                    </span>
-
-                    <Link href={`/perfil/${u.idUsuario}`} className={cls.btnIcone} aria-label={`Ver perfil de ${u.nomeUsuario}`}>
-                      <ExternalLink size={16} />
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGerenciando(u);
-                        setRoleNova("");
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                      disabled={ocupado || ehVoce}
-                      className={cls.btnIcone}
-                      aria-label={`Gerenciar perfis de ${u.nomeUsuario}`}
-                      title={ehVoce ? "Você não pode alterar seus próprios perfis" : "Gerenciar perfis"}
-                    >
-                      <UserPlus size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleAtivo(u)}
-                      disabled={ocupado || ehVoce}
-                      className={cls.btnIcone}
-                      aria-label={`${u.active ? "Desativar" : "Ativar"} ${u.nomeUsuario}`}
-                      title={ehVoce ? "Você não pode desativar a própria conta" : u.active ? "Desativar" : "Ativar"}
-                    >
-                      {ocupado ? <Loader2 size={16} className="animate-spin" /> : <Power size={16} />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => excluir(u)}
-                      disabled={ocupado || ehVoce}
-                      className={cls.btnIconePerigo}
-                      aria-label={`Excluir ${u.nomeUsuario}`}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          <Paginacao
-            pagina={paginacao.pagina}
-            totalPaginas={paginacao.totalPaginas}
-            total={paginacao.total}
-            inicio={paginacao.inicio}
-            fim={paginacao.fim}
-            tamanho={paginacao.tamanho}
-            onPagina={paginacao.irPara}
-            onTamanho={paginacao.setTamanho}
-            rotulo="usuários"
-          />
+            <select
+              aria-label="Filtrar por status"
+              value={filtroStatus}
+              onChange={(e) => {
+                setFiltroStatus(e.target.value as FiltroStatus);
+                lista.irPara(1);
+              }}
+              className={`${cls.input} !py-2.5 !bg-white sm:!w-44`}
+            >
+              <option value="todos">Todos os status</option>
+              <option value="ativos">Somente ativos</option>
+              <option value="inativos">Somente inativos</option>
+            </select>
+            <select
+              aria-label="Filtrar por perfil"
+              value={filtroRole}
+              onChange={(e) => {
+                setFiltroRole(e.target.value);
+                lista.irPara(1);
+              }}
+              className={`${cls.input} !py-2.5 !bg-white sm:!w-44`}
+            >
+              <option value="">Todos os perfis</option>
+              {Object.keys(ROLE_ID_MAP).map((r) => (
+                <option key={r} value={r}>
+                  {ROLE_LABEL[r]}
+                </option>
+              ))}
+            </select>
           </>
+        }
+      />
+
+      <ListaAdmin
+        carregando={loading}
+        erro={erroCarregamento}
+        onTentarNovamente={carregar}
+        vazio={usuarios.length === 0}
+        semResultado={lista.total === 0}
+        termo={lista.termo}
+        onLimparPesquisa={() => {
+          lista.setTermo("");
+          setFiltroStatus("todos");
+          setFiltroRole("");
+        }}
+        icone={ShieldCheck}
+        tituloVazio="Nenhum usuário cadastrado"
+        rodape={<Paginacao {...lista} onPagina={lista.irPara} onPorPagina={lista.setPorPagina} rotuloItens="usuários" />}
+      >
+        {lista.itens.map((u) => {
+          const ehVoce = u.idUsuario === admin?.idUsuario;
+          const ocupado = processandoId === u.idUsuario;
+          const principal = obterRolePrincipal(u.roles);
+          return (
+            <LinhaAdmin
+              key={u.idUsuario}
+              rotulo={u.nomeUsuario}
+              inicio={<Avatar url={u.urlImagemUsuario} nome={u.nomeUsuario} tamanho={38} />}
+              titulo={
+                <span className="flex flex-wrap items-center gap-2">
+                  {u.nomeUsuario}
+                  {ehVoce && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10.5px] font-bold text-brand-700">você</span>}
+                </span>
+              }
+              subtitulo={<span className="break-all">{u.emailUsuario}</span>}
+              meta={
+                <>
+                  <span
+                    className={u.active ? cls.chipAtivo : cls.chipInativo}
+                    title={u.active ? "Conta ativa" : "Conta desativada ou aguardando a verificação do e-mail (código enviado no cadastro)"}
+                  >
+                    {u.active ? "Ativo" : "Inativo"}
+                  </span>
+                  <span className={cls.chip} title={(u.roles ?? []).map((r) => ROLE_LABEL[r] ?? r).join(", ")}>
+                    {ROLE_LABEL[principal] ?? principal}
+                    {(u.roles ?? []).length > 1 && ` +${u.roles.length - 1}`}
+                  </span>
+                </>
+              }
+              acoes={
+                <>
+                  <Link href={`/perfil/${u.idUsuario}`} className={`${cls.btnIcone} !h-9 !w-9`} aria-label={`Ver perfil de ${u.nomeUsuario}`} title="Ver perfil">
+                    <ExternalLink size={16} />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => toggleAtivo(u)}
+                    disabled={ocupado || ehVoce}
+                    className={`${cls.btnIcone} !h-9 !w-9`}
+                    aria-label={`${u.active ? "Desativar" : "Ativar"} ${u.nomeUsuario}`}
+                    title={ehVoce ? "Você não pode desativar a própria conta" : u.active ? "Desativar" : "Ativar"}
+                  >
+                    {ocupado ? <Loader2 size={16} className="animate-spin" /> : <Power size={16} />}
+                  </button>
+                </>
+              }
+              onEditar={() => abrirEdicao(u)}
+              editarDesabilitado={ehVoce || ocupado}
+              dicaEditar={ehVoce ? "Você não pode alterar a própria conta aqui" : undefined}
+              onExcluir={ehVoce ? undefined : () => excluir(u)}
+            />
+          );
+        })}
+      </ListaAdmin>
+
+      {/* ------------------------------------------------------------ cadastrar */}
+      <ModalAdmin
+        aberto={cadastro.aberto}
+        titulo="Cadastrar usuário"
+        descricao="A conta é criada com o perfil Usuário e fica inativa até a pessoa confirmar o código enviado por e-mail (ou até você ativá-la em Editar). Outros perfis podem ser adicionados em Editar."
+        onFechar={cadastro.fechar}
+        onSalvar={salvarCadastro}
+        salvando={cadastro.salvando}
+        rotuloSalvar="Cadastrar"
+      >
+        <div className="space-y-4">
+          {cadastro.erro && <Alerta>{cadastro.erro}</Alerta>}
+          <CampoAdmin id="usr-nome" rotulo="Nome" obrigatorio erro={errosCadastro.nome}>
+            <input id="usr-nome" value={nome} maxLength={255} onChange={(e) => setNome(e.target.value)} autoComplete="off" className={cls.input} {...campoErro("nome")} />
+          </CampoAdmin>
+          <CampoAdmin id="usr-email" rotulo="E-mail" obrigatorio erro={errosCadastro.email}>
+            <input id="usr-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" className={cls.input} {...campoErro("email")} />
+          </CampoAdmin>
+          <CampoAdmin id="usr-telefone" rotulo="Telefone (opcional)" erro={errosCadastro.telefone} ajuda="Com DDD. Ex.: (11) 99999-0000">
+            <input
+              id="usr-telefone"
+              type="tel"
+              inputMode="tel"
+              value={telefone}
+              maxLength={20}
+              onChange={(e) => setTelefone(e.target.value.replace(/[^\d()\s+-]/g, ""))}
+              className={cls.input}
+              {...campoErro("telefone")}
+            />
+          </CampoAdmin>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <CampoAdmin id="usr-senha" rotulo="Senha" obrigatorio erro={errosCadastro.senha} ajuda={`Mínimo de ${SENHA_MINIMA} caracteres.`}>
+              <input id="usr-senha" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="new-password" className={cls.input} {...campoErro("senha")} />
+            </CampoAdmin>
+            <CampoAdmin id="usr-confirmarSenha" rotulo="Confirmar senha" obrigatorio erro={errosCadastro.confirmarSenha}>
+              <input
+                id="usr-confirmarSenha"
+                type="password"
+                value={confirmarSenha}
+                onChange={(e) => setConfirmarSenha(e.target.value)}
+                autoComplete="new-password"
+                className={cls.input}
+                {...campoErro("confirmarSenha")}
+              />
+            </CampoAdmin>
+          </div>
+        </div>
+      </ModalAdmin>
+
+      {/* ------------------------------------------------------------ editar */}
+      <ModalAdmin
+        aberto={edicao.aberto}
+        titulo="Editar usuário"
+        descricao={emEdicao ? `${emEdicao.nomeUsuario} · ${emEdicao.emailUsuario}` : undefined}
+        onFechar={edicao.fechar}
+        onSalvar={salvarEdicao}
+        salvando={edicao.salvando}
+        rotuloSalvar="Salvar alterações"
+      >
+        {emEdicao && (
+          <div className="space-y-5">
+            {edicao.erro && <Alerta>{edicao.erro}</Alerta>}
+            <dl className="grid gap-3 rounded-xl bg-ink-25 p-4 text-[13.5px] sm:grid-cols-2">
+              <div>
+                <dt className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-ink-400">Nome</dt>
+                <dd className="mt-0.5 break-words text-ink-800">{emEdicao.nomeUsuario}</dd>
+              </div>
+              <div>
+                <dt className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-ink-400">E-mail</dt>
+                <dd className="mt-0.5 break-all text-ink-800">{emEdicao.emailUsuario}</dd>
+              </div>
+              <div>
+                <dt className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-ink-400">Telefone</dt>
+                <dd className="mt-0.5 text-ink-800">{emEdicao.telefoneUsuario || "Não informado"}</dd>
+              </div>
+              <div>
+                <dt className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-ink-400">Perfis atuais</dt>
+                <dd className="mt-1 flex flex-wrap gap-1.5">
+                  {(emEdicao.roles ?? []).map((r) => (
+                    <span key={r} className={cls.chip}>
+                      {ROLE_LABEL[r] ?? r}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            </dl>
+            <p className="text-[12.5px] leading-5 text-ink-500">
+              Nome, e-mail e telefone são alterados pelo próprio usuário. A atualização de cadastro do servidor (PUT /usuario) gravaria a
+              senha sem criptografia e bloquearia o acesso da pessoa.
+            </p>
+
+            <fieldset>
+              <legend className={cls.label}>Status da conta</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { valor: true, rotulo: "Ativa" },
+                  { valor: false, rotulo: "Desativada" },
+                ].map((op) => (
+                  <label
+                    key={op.rotulo}
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-[14px] ${
+                      ativo === op.valor ? "border-brand-300 bg-brand-50 text-ink-900" : "border-ink-100 text-ink-700 hover:bg-ink-25"
+                    }`}
+                  >
+                    <input type="radio" name="usr-status" checked={ativo === op.valor} onChange={() => setAtivo(op.valor)} className="h-4 w-4 accent-brand-600" />
+                    {op.rotulo}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <CampoAdmin
+              id="usr-role"
+              rotulo="Adicionar perfil"
+              ajuda={rolesDisponiveis.length === 0 ? "Este usuário já possui todos os perfis." : "O servidor só adiciona perfis; não é possível removê-los depois."}
+            >
+              <select
+                id="usr-role"
+                value={roleNova}
+                onChange={(e) => setRoleNova(e.target.value)}
+                disabled={rolesDisponiveis.length === 0}
+                className={`${cls.input} !bg-white`}
+              >
+                <option value="">Nenhum</option>
+                {rolesDisponiveis.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABEL[r] ?? r}
+                  </option>
+                ))}
+              </select>
+            </CampoAdmin>
+          </div>
         )}
-      </div>
+      </ModalAdmin>
     </>
   );
 }

@@ -37,7 +37,7 @@ function LoginConteudo() {
   // Quem já está logado não precisa ver a tela de login.
   useEffect(() => {
     if (!isLoading && isAuthenticated && !loading) {
-      if (usuarioLogado && !usuarioLogado.isActive) router.replace("/auth/verificar-conta");
+      if (usuarioLogado && !usuarioLogado.isActive && !isAdmin) router.replace("/auth/verificar-conta");
       else router.replace(isAdmin ? "/admin" : destino || "/feed");
     }
   }, [isLoading, isAuthenticated, isAdmin, destino, router, loading, usuarioLogado]);
@@ -54,7 +54,10 @@ function LoginConteudo() {
     try {
       const usuario = await login({ emailUsuario: email.trim(), senhaUsuario: senha });
 
-      if (!usuario.isActive) {
+      const admin = usuario.roles?.includes("ADMIN");
+
+      // O administrador não passa pela verificação por código.
+      if (!usuario.isActive && !admin) {
         // Conta ainda não verificada (o cadastro cria a conta inativa até o código do
         // e-mail ser confirmado) ou desativada pelo administrador. A verificação exige o
         // token, então a sessão continua aberta e a tela de verificação trata os dois casos.
@@ -63,7 +66,6 @@ function LoginConteudo() {
         return;
       }
 
-      const admin = usuario.roles?.includes("ADMIN");
       router.replace(admin ? "/admin" : destino || "/feed");
     } catch (error) {
       if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 401)) {

@@ -59,7 +59,7 @@ import { buscarProjeto, atualizarProjeto, excluirProjeto, removerImagensProjeto,
 import { listarTiposProjeto } from "../../services/tipoProjeto.service";
 import { listarContratos } from "../../services/contrato.service";
 import { listarPerfisUsuario } from "../../services/perfilUsuario.service";
-import { listarPorProjeto, vincularUsuario, removerVinculo, ehParteDoContrato } from "../../services/projetoUsuario.service";
+import { listarPorProjeto, vincularUsuario, removerVinculo, atualizarVinculo, ehParteDoContrato } from "../../services/projetoUsuario.service";
 
 /** Botão "Votar" (curtida do projeto) com a contagem real de votos. */
 function BotaoVotarProjeto({ curtida, desabilitado }: { curtida: ReturnType<typeof useCurtida>; desabilitado: boolean }) {
@@ -107,6 +107,7 @@ export default function ProjetoDetalhePage() {
   const [novoMembroTipoVinculoId, setNovoMembroTipoVinculoId] = useState<number | "">("");
   const [salvandoMembro, setSalvandoMembro] = useState(false);
   const [erroMembro, setErroMembro] = useState("");
+  const [alterandoVinculoId, setAlterandoVinculoId] = useState<number | null>(null);
 
   // Empresas cadastradas: identificam "empresas relacionadas" e o voto das empresas.
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -347,6 +348,39 @@ export default function ProjetoDetalhePage() {
       setMembros((atual) => atual.filter((m) => m.idProjetoUsuario !== membro.idProjetoUsuario));
     } catch (error) {
       notificar(mensagemErro(error, "Não foi possível remover este membro."));
+    }
+  }
+
+  async function alterarTipoMembro(membro: ProjetoUsuario, tipoVinculoId: number) {
+    if (!projeto || tipoVinculoId === membro.tipoVinculoId) return;
+    // Mesma regra do cadastro: uma pessoa não pode ter o mesmo vínculo duas vezes.
+    if (membros.some((m) => m.idProjetoUsuario !== membro.idProjetoUsuario && m.usuarioId === membro.usuarioId && m.tipoVinculoId === tipoVinculoId)) {
+      notificar(`${membro.nomeUsuario} já possui o vínculo "${rotuloVinculo(TIPOS_VINCULO.find((t) => t.id === tipoVinculoId)?.nome)}" neste projeto.`);
+      return;
+    }
+    const deixaDeSerCriador = membro.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR;
+    if (deixaDeSerCriador) {
+      const ultimoCriador = criadores.length === 1;
+      const proprio = membro.usuarioId === usuario?.idUsuario;
+      const ok = await confirmar(
+        ultimoCriador
+          ? `${membro.nomeUsuario} é o único criador registrado. Ao mudar o vínculo, o projeto ficará sem dono identificado.`
+          : proprio
+            ? "Ao deixar de ser criador, você perde a permissão de editar o projeto e gerenciar a equipe."
+            : `Mudar o vínculo de ${membro.nomeUsuario}? Ele deixará de ser criador do projeto.`,
+        { titulo: "Alterar vínculo", perigo: true, confirmarLabel: "Alterar" }
+      );
+      if (!ok) return;
+    }
+    setAlterandoVinculoId(membro.idProjetoUsuario);
+    try {
+      const atualizado = await atualizarVinculo(membro.idProjetoUsuario, { projetoId: projeto.idProjeto, usuarioId: membro.usuarioId, tipoVinculoId });
+      setMembros((atual) => atual.map((m) => (m.idProjetoUsuario === membro.idProjetoUsuario ? atualizado : m)));
+      notificar("Vínculo atualizado.", "sucesso");
+    } catch (error) {
+      notificar(mensagemErro(error, "Não foi possível alterar o vínculo."));
+    } finally {
+      setAlterandoVinculoId(null);
     }
   }
 
@@ -825,7 +859,23 @@ export default function ProjetoDetalhePage() {
                   <p className="text-[0.8125rem] text-ink-500 mt-0.5">Vinculado desde {formatarData(membro.dataVinculo)}</p>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <span className={cls.chip}>{rotuloVinculo(membro.nomeTipoVinculo)}</span>
+                  {podeGerenciar ? (
+                    <select
+                      aria-label={`Tipo de vínculo de ${membro.nomeUsuario}`}
+                      value={membro.tipoVinculoId}
+                      disabled={alterandoVinculoId === membro.idProjetoUsuario}
+                      onChange={(e) => alterarTipoMembro(membro, Number(e.target.value))}
+                      className={`${cls.input} !w-auto !bg-white !py-1.5 !text-[13px]`}
+                    >
+                      {TIPOS_VINCULO.map((tipo) => (
+                        <option key={tipo.id} value={tipo.id}>
+                          {tipo.rotulo}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={cls.chip}>{rotuloVinculo(membro.nomeTipoVinculo)}</span>
+                  )}
                   {podeGerenciar && (
                     <button
                       type="button"

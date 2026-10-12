@@ -59,3 +59,91 @@ Escopo: **somente o front-end** (`front-end/`). O back-end foi usado apenas como
 O E2E rodou contra um mock da API escrito a partir dos controllers/DTOs do back-end (o back-end
 real não sobe neste ambiente). O mock não faz parte da entrega. Antes de publicar, rode os fluxos
 principais contra o back-end real.
+
+---
+
+# Grupo 10 — Melhorias nas páginas administrativas
+
+Escopo: somente o front-end. O back-end não foi alterado.
+
+## Páginas e o que cada uma ganhou
+
+| Página | Pesquisar | Cadastrar (modal) | Editar (modal) | Paginação |
+|---|---|---|---|---|
+| Áreas | nome, descrição | sim | sim | sim |
+| Subáreas | nome, descrição, área + filtro por área | sim | sim | sim |
+| Especialidades | nome | sim | sim | sim |
+| Endereços | rua, número, complemento, bairro, UF, CEP, usuário + filtro por estado | sim (com busca de CEP) | sim | sim |
+| Tipos de projeto | nome, descrição | sim | sim | sim |
+| Termos de contrato | título, descrição, contrato + filtro por contrato | sim | sim | sim |
+| Termos de postagem / vínculo | título, descrição | sim* | sim* | sim |
+| Usuários | nome, e-mail, telefone, perfil + filtros de status e perfil | sim | status e perfis** | sim |
+| Projetos | nome, descrição, tipo + filtros | —*** | —*** | sim |
+| Postagens | título, texto, data, autor | —*** | —*** | sim |
+| Interações (comentários) | texto, autor, publicação | — | — | sim |
+
+\* `POST/PUT /termo-postagem` e `/termo-vinculo` só aceitam as roles USUARIO/EMPRESA. Para um
+administrador sem essas roles, "Cadastrar" e "Editar" ficam desabilitados com a explicação.
+\*\* `PUT /usuario/{id}` grava a senha sem criptografia e bloquearia o acesso do usuário; por isso a
+modal de edição altera status (`/usuario/ativar-desativar`) e adiciona perfis (`/usuario/alterar-role`).
+\*\*\* `POST/PUT /projeto` e `/postagem` não aceitam a role ADMIN: as telas são de moderação.
+
+## Como funciona
+
+- **Paginação:** nenhum endpoint de listagem do back-end tem `Pageable`; a lista vem inteira e é
+  paginada no front (10, 20 ou 50 por página). Mudar a pesquisa ou um filtro volta à página 1; uma
+  página que deixa de existir após excluir é corrigida sozinha. Com 0 registros a barra some.
+- **Pesquisa:** ignora maiúsculas e acentos e exige todas as palavras digitadas; funciona junto com a
+  paginação e com os filtros.
+- **Modais:** mesmo componente em todas as telas (`ModalAdmin`): validação, mensagens de erro, Enter
+  envia, Esc/X/Cancelar fecham, proteção contra clique duplo, foco preso na modal; no celular abre
+  como painel inferior. Após salvar, a lista é recarregada e só então aparece a mensagem de sucesso.
+- **Regras preservadas:** nome duplicado em colunas UNIQUE é bloqueado antes de enviar; limites de
+  tamanho das colunas; exclusão de área com subáreas, de especialidade em uso e de tipo de projeto em
+  uso continua bloqueada (evita erro 500 ou exclusão em cascata).
+
+## Verificações
+
+| Verificação | Resultado |
+|---|---|
+| `npx tsc --noEmit` | 0 erros |
+| `npx eslint .` | 0 erros (só o aviso `set-state-in-effect` já documentado) |
+| `npx vitest run` | 10 arquivos, 95 testes OK (7 novos em `tests/listagem.test.ts`) |
+| `npx next build` | OK |
+| E2E admin (Chromium) | 91/91: paginação (próxima, anterior, número, itens por página), pesquisa com/sem resultado, cadastrar e editar em Áreas, Subáreas, Especialidades, Tipos de projeto, Termos de contrato, Endereços (CEP) e Usuários; termos de postagem sem permissão; 12 páginas admin em 375, 768 e 1280 px sem rolagem horizontal nem erros de console; modal dentro da tela |
+| E2E usuário (regressão) | 91/91 |
+
+---
+
+# Notificações de curtidas, comentários, respostas e votos
+
+Escopo: somente o front-end. O back-end não foi alterado.
+
+**Por que no front:** o back-end só cria notificações de conexão (`ConexaoService.criarNotificacao`);
+não existe notificação de curtida/comentário nem endpoint para criá-las.
+
+**Como funciona** (`lib/atividade.ts`, `services/atividade.service.ts`):
+
+- A cada 60 s (com a aba visível), ao abrir Notificações e ao clicar em "Atualizar", o front consulta
+  `GET /postagem`, `GET /comentario`, `GET /sub-comentario`, os projetos em que o usuário é criador e
+  `GET /curtida/status/{eu}/{tipo}/{id}` das publicações, comentários e projetos dele.
+- Compara com o último estado visto (guardado no navegador, por usuário) e gera:
+  - **Novo comentário** — comentário de outra pessoa numa publicação do usuário (com autor e trecho);
+  - **Nova resposta** — resposta a um comentário do usuário (o back-end não envia o autor das
+    respostas, então aparece "Alguém respondeu"; respostas do próprio usuário são ignoradas);
+  - **Novas curtidas** — aumento das curtidas de outras pessoas numa publicação ou comentário
+    (a API não informa quem curtiu, só a quantidade);
+  - **Novo voto no projeto** — aumento das curtidas (votos) de outras pessoas num projeto criado pelo usuário.
+- Avisos novos aparecem como **toast**, entram no **contador do sino** (somados às notificações de
+  conexão do servidor) e na página **Notificações**, com filtros e "Ver publicação"/"Ver projeto".
+- Na primeira verificação, o que já existia vira histórico lido, sem horário.
+
+**Limitações:** o estado fica no navegador, então o aviso aparece no dispositivo em que a pessoa
+usa o PitcherX (em outro dispositivo, a primeira verificação vira histórico). Para notificações
+iguais em todos os dispositivos e com o nome de quem curtiu, o back-end precisaria criar
+`Notificacao` em `CurtidaService`, `ComentarioService` e `SubComentarioService`.
+
+**Verificações:** `tsc` 0 erros; ESLint 0 erros; `vitest` 101 testes (6 novos em
+`tests/atividade.test.ts`); `next build` OK; E2E de notificações 10/10 (histórico inicial, toast,
+contador do sino, comentário com autor, curtidas, voto, abrir publicação, marcar todas como lidas,
+novo aviso depois de tudo lido, sem erros de console); regressão: E2E usuário 91/91 e admin 91/91.

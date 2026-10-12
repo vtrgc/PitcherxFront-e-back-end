@@ -6,8 +6,9 @@ import Link from "next/link";
 import { FileSignature, Plus, Pencil, Trash2, Briefcase, ChevronRight } from "lucide-react";
 
 import PageShell from "../components/PageShell";
-import Paginacao from "../components/ui/Paginacao";
+import Paginacao from "../components/admin/Paginacao";
 import { usePaginacao } from "../hook/usePaginacao";
+import { OPCOES_POR_PAGINA_GRADE } from "../lib/listagem";
 import EmptyState from "../components/EmptyState";
 import FormContrato from "../components/FormContrato";
 import SearchBar from "../components/SearchBar";
@@ -125,7 +126,7 @@ function ContratosPageContent() {
       `${c.tituloContrato} ${c.descricaoContrato} ${projetoMap.get(c.projetoId) ?? ""}`.toLowerCase().includes(termo)
     );
   }, [contratos, busca, projetoMap]);
-  const paginacao = usePaginacao(visiveis, { tamanhoInicial: 10, chaveReinicio: busca });
+  const paginacao = usePaginacao(visiveis, busca.trim());
 
   async function salvar(dados: ContratoRequest) {
     if (editando) {
@@ -247,82 +248,69 @@ function ContratosPageContent() {
         </div>
       ) : (
         <>
-        <div className="grid gap-5 md:grid-cols-2">
-          {paginacao.itens.map((contrato) => {
-            const gerenciavel = podeGerenciar(contrato.projetoId);
-            return (
-              <article key={contrato.idContrato} className={`${cls.card} flex flex-col p-5`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className={contrato.active ? cls.chipAtivo : cls.chipInativo}>{contrato.active ? "Ativo" : "Inativo"}</span>
-                  {gerenciavel && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditando(contrato);
-                          setMostrarForm(true);
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }}
-                        className={cls.btnIcone}
-                        aria-label={`Editar contrato ${contrato.tituloContrato}`}
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => excluir(contrato)}
-                        className={cls.btnIconePerigo}
-                        aria-label={`Excluir contrato ${contrato.tituloContrato}`}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  )}
-                </div>
+          <div className="grid gap-5 md:grid-cols-2">
+            {paginacao.itens.map((contrato) => {
+              const gerenciavel = podeGerenciar(contrato.projetoId);
+              return (
+                <article key={contrato.idContrato} className={`${cls.card} flex flex-col p-5`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={contrato.active ? cls.chipAtivo : cls.chipInativo}>{contrato.active ? "Ativo" : "Inativo"}</span>
+                    {gerenciavel && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditando(contrato);
+                            setMostrarForm(true);
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }}
+                          className={cls.btnIcone}
+                          aria-label={`Editar contrato ${contrato.tituloContrato}`}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => excluir(contrato)}
+                          className={cls.btnIconePerigo}
+                          aria-label={`Excluir contrato ${contrato.tituloContrato}`}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
-                <h3 className="font-display mt-3 text-[15.5px] font-bold text-ink-900 break-words">{contrato.tituloContrato}</h3>
-                <p className={`${cls.texto} mt-1.5 line-clamp-3 break-words`}>{contrato.descricaoContrato}</p>
-                <p className="text-[0.8125rem] text-ink-500 mt-3">
-                  {formatarDataHora(contrato.dataInicioContrato)} — {formatarDataHora(contrato.dataFimContrato)}
-                </p>
+                  <h3 className="font-display mt-3 text-[15.5px] font-bold text-ink-900 break-words">{contrato.tituloContrato}</h3>
+                  <p className={`${cls.texto} mt-1.5 line-clamp-3 break-words`}>{contrato.descricaoContrato}</p>
+                  <p className="text-[0.8125rem] text-ink-500 mt-3">
+                    {formatarDataHora(contrato.dataInicioContrato)} — {formatarDataHora(contrato.dataFimContrato)}
+                  </p>
 
-                <Link
-                  href={`/projetos/${contrato.projetoId}`}
-                  className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-700 hover:text-brand-700"
-                >
-                  <Briefcase size={15} aria-hidden="true" />
-                  {projetoMap.get(contrato.projetoId) || `Projeto #${contrato.projetoId}`}
-                </Link>
-
-                <div className="mt-auto pt-4">
                   <Link
-                    href={`/contratos/${contrato.idContrato}`}
-                    className="flex items-center justify-between border-t border-ink-100 pt-3.5 text-[13.5px] font-semibold text-brand-700"
+                    href={`/projetos/${contrato.projetoId}`}
+                    className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-700 hover:text-brand-700"
                   >
-                    Ver detalhes do contrato
-                    <ChevronRight size={15} aria-hidden="true" />
+                    <Briefcase size={15} aria-hidden="true" />
+                    {projetoMap.get(contrato.projetoId) || `Projeto #${contrato.projetoId}`}
                   </Link>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-        <div className={`${cls.card} overflow-hidden`}>
-          <Paginacao
-            pagina={paginacao.pagina}
-            totalPaginas={paginacao.totalPaginas}
-            total={paginacao.total}
-            inicio={paginacao.inicio}
-            fim={paginacao.fim}
-            tamanho={paginacao.tamanho}
-            onPagina={(p) => {
-              paginacao.irPara(p);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            onTamanho={paginacao.setTamanho}
-            rotulo="contratos"
-          />
-        </div>
+
+                  <div className="mt-auto pt-4">
+                    <Link
+                      href={`/contratos/${contrato.idContrato}`}
+                      className="flex items-center justify-between border-t border-ink-100 pt-3.5 text-[13.5px] font-semibold text-brand-700"
+                    >
+                      Ver detalhes do contrato
+                      <ChevronRight size={15} aria-hidden="true" />
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <div className={`${cls.card} mt-6 overflow-hidden [&>nav]:border-t-0`}>
+            <Paginacao {...paginacao} onPagina={paginacao.irPara} onPorPagina={paginacao.setPorPagina} rotuloItens="contratos" opcoesPorPagina={OPCOES_POR_PAGINA_GRADE} />
+          </div>
         </>
       )}
     </PageShell>

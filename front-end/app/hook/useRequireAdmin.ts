@@ -18,14 +18,11 @@ export function useRequireAdmin() {
       router.replace(`/auth/login?redirect=%2Fadmin${sessaoExpirada ? "&expirada=1" : ""}`);
       return;
     }
-    if (usuario?.isActive === false) {
-      router.replace("/auth/verificar-conta?redirect=%2Fadmin");
-      return;
-    }
     if (!isAdmin) {
       router.replace("/feed");
     }
-  }, [isLoading, isAuthenticated, isAdmin, router, sessaoExpirada, usuario?.isActive]);
+  }, [isLoading, isAuthenticated, isAdmin, router, sessaoExpirada]);
 
-  return { usuario, isAdmin, pronto: !isLoading && isAuthenticated && isAdmin && usuario?.isActive !== false };
+  // A conta de administrador não passa pela verificação por código do cadastro.
+  return { usuario, isAdmin, pronto: !isLoading && isAuthenticated && isAdmin };
 }

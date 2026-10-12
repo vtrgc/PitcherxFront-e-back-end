@@ -51,6 +51,7 @@ import {
   salvarProfissional,
 } from "../../services/perfilEdicao.service";
 import { PerfilUsuario } from "../../types/PerfilUsuario";
+import { excluirPerfilUsuario } from "../../services/perfilUsuario.service";
 import { Endereco } from "../../types/Endereco";
 
 /**
@@ -180,6 +181,31 @@ function FormularioPerfil({
     const alvo = window.location.hash.slice(1);
     if (alvo) document.getElementById(alvo)?.scrollIntoView({ block: "start" });
   }, []);
+
+  // DELETE /perfil-usuario/{id}: remove as informações profissionais (e a capa do perfil).
+  const [removendoProf, setRemovendoProf] = useState(false);
+  async function removerProfissional() {
+    if (!perfil || removendoProf || salvando) return;
+    const ok = await confirmar(
+      `Suas informações profissionais (área de atuação, CPF/CNPJ, LinkedIn${perfil.urlBanner ? " e a capa do perfil" : ""}) serão removidas agora.${sujo.profissional ? " As alterações não salvas nesta seção serão descartadas." : ""}`,
+      { titulo: "Remover informações profissionais", perigo: true, confirmarLabel: "Remover" }
+    );
+    if (!ok) return;
+    setRemovendoProf(true);
+    try {
+      await excluirPerfilUsuario(perfil.idPerfilUsuario);
+      const base = profissionalInicial(null);
+      setPerfil(null);
+      setBaseProf(base);
+      setProf(base);
+      setErrosProf({});
+      notificar("Informações profissionais removidas.", "sucesso");
+    } catch (error) {
+      notificar(mensagemErroEtapa("profissional", error));
+    } finally {
+      setRemovendoProf(false);
+    }
+  }
 
   async function cancelar() {
     if (temAlteracoes && !(await confirmarDescarte())) return;
@@ -378,6 +404,13 @@ function FormularioPerfil({
               perfil
                 ? "Sua área de atuação (e o LinkedIn, se informado) aparecem no perfil e em Explorar."
                 : "Opcional. Para salvar, informe a área de atuação e o CPF/CNPJ — o LinkedIn não é obrigatório."
+            }
+            acao={
+              perfil && (
+                <button type="button" onClick={removerProfissional} disabled={salvando || removendoProf} className={cls.btnPerigo} aria-label="Remover informações profissionais">
+                  {removendoProf ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Trash2 size={15} aria-hidden="true" />} Remover
+                </button>
+              )
             }
           >
             <CamposProfissional valor={prof} onChange={setProf} erros={errosProf} desabilitado={salvando} />

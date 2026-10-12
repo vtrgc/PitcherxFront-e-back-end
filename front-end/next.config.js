@@ -1,3 +1,11 @@
+/**
+ * Endereço do PitcherX-BackEnd (sem barra no final). O navegador não chama o backend
+ * direto: tudo passa por `/api-backend/*` (mesma origem do front) e o Next repassa para cá.
+ * Assim o CORS do backend não interfere — o SecurityConfig atual não habilita CORS no
+ * Spring Security e recusa o "preflight" (OPTIONS) das requisições com token (403).
+ */
+const BACKEND_URL = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080").replace(/\/+$/, "");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -12,6 +20,9 @@ const nextConfig = {
         hostname: "images.unsplash.com",
       },
     ],
+  },
+  async rewrites() {
+    return [{ source: "/api-backend/:path*", destination: `${BACKEND_URL}/:path*` }];
   },
   async headers() {
     return [
