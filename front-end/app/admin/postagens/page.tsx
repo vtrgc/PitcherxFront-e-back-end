@@ -18,9 +18,9 @@ import { buscarContagemCurtidas, TIPO_CONTEUDO } from "../../services/curtida.se
 import { Post } from "../../types/Post";
 import { Usuario } from "../../types/Usuario";
 import { Comentario } from "../../types/Comentario";
-import { listarPostagens, excluirPostagem, removerImagensPostagem } from "../../services/postagem.service";
+import { listarPostagens, excluirPostagemComComentarios, removerImagensPostagem } from "../../services/postagem.service";
 import { listarUsuarios } from "../../services/usuario.service";
-import { listarComentarios, excluirComentario } from "../../services/comentario.service";
+import { listarComentarios, excluirComentarioComRespostas } from "../../services/comentario.service";
 
 export default function AdminPostagensPage() {
   const { pronto } = useRequireAdmin();
@@ -93,7 +93,7 @@ export default function AdminPostagensPage() {
     if (!(await confirmar(`Excluir permanentemente a postagem "${titulo}"? Os comentários dela também serão removidos.`, { titulo: "Excluir postagem", perigo: true }))) return;
     setProcessandoId(id);
     try {
-      await excluirPostagem(id);
+      await excluirPostagemComComentarios(id);
       setPostagens((atual) => atual.filter((p) => p.idPostagem !== id));
     } catch (error) {
       notificar(mensagemErro(error, "Não foi possível excluir esta postagem."));
@@ -120,7 +120,7 @@ export default function AdminPostagensPage() {
   async function excluirComentarioModeracao(idComentario: number) {
     if (!(await confirmar("Excluir este comentário e as respostas dele?", { titulo: "Excluir comentário", perigo: true }))) return;
     try {
-      await excluirComentario(idComentario);
+      await excluirComentarioComRespostas(idComentario);
       setComentarios((atual) => atual.filter((c) => c.idComentario !== idComentario));
     } catch (error) {
       notificar(mensagemErro(error, "Não foi possível excluir este comentário."));

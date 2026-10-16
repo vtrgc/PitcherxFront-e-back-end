@@ -10,7 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { useCurtida } from "../hook/useCurtida";
 import { useDenuncia } from "../hook/useDenuncia";
 import { mensagemErro } from "../lib/api";
-import { atualizarComentario, excluirComentario } from "../services/comentario.service";
+import { atualizarComentario, excluirComentarioComRespostas } from "../services/comentario.service";
 import { atualizarSubComentario, criarSubComentario, excluirSubComentario, listarSubComentarios } from "../services/subComentario.service";
 import { autorDaResposta, esquecerRespostaPropria, idsRespostasProprias, registrarRespostaPropria } from "../lib/autoriaRespostas";
 import ConteudoOcultado from "./denuncia/ConteudoOcultado";
@@ -137,7 +137,7 @@ export default function ComentarioCard({ comentario, aoAlterar }: Props) {
     if (!(await confirmar("Excluir este comentário e as respostas dele?", { titulo: "Excluir comentário", perigo: true }))) return;
     setExcluindo(true);
     try {
-      await excluirComentario(comentario.idComentario);
+      await excluirComentarioComRespostas(comentario.idComentario);
       aoAlterar?.();
     } catch (error) {
       notificar(mensagemErro(error, "Não foi possível excluir o comentário."));
