@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { FileSignature, ArrowLeft, Pencil, Trash2, Loader2, Briefcase, ScrollText, Lock } from "lucide-react";
+import { FileSignature, ArrowLeft, Pencil, Trash2, Loader2, Briefcase, ScrollText, Lock, Check } from "lucide-react";
 
 import PageShell from "../../components/PageShell";
 import EmptyState from "../../components/EmptyState";
@@ -17,9 +17,12 @@ import { formatarDataHora } from "../../lib/date";
 import { Contrato, ContratoRequest } from "../../types/Contrato";
 import { Projeto } from "../../types/Projeto";
 import { Termo } from "../../types/Termo";
-import { buscarContrato, atualizarContrato, excluirContrato } from "../../services/contrato.service";
+import { buscarContrato, atualizarContrato, excluirContrato, aceitarContrato } from "../../services/contrato.service";
+import { idsPropostasEnviadas, listarPropostasDoProjeto } from "../../services/proposta.service";
+import { Proposta } from "../../types/Proposta";
+import { ChipStatusNegociacao } from "../../components/projeto/ChipsNegociacao";
 import { buscarProjeto } from "../../services/projeto.service";
-import { listarTermos } from "../../services/termo.service";
+import { listarTermosDoContrato } from "../../services/termo.service";
 import { ehParteDoContrato, listarPorUsuario } from "../../services/projetoUsuario.service";
 import { TIPO_VINCULO_ID } from "../../types/ProjetoUsuario";
 
@@ -41,6 +44,8 @@ export default function ContratoDetalhePage() {
   const [erro, setErro] = useState("");
   const [naoEncontrado, setNaoEncontrado] = useState(false);
   const [editando, setEditando] = useState(false);
+  const [propostas, setPropostas] = useState<Proposta[]>([]);
+  const [aceitando, setAceitando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -60,7 +65,11 @@ export default function ContratoDetalhePage() {
       if (!isAdmin) {
         const meusVinculos = (await listarPorUsuario(usuario.idUsuario)) ?? [];
         const doProjeto = meusVinculos.filter((v) => v.projetoId === dados.projetoId);
-        if (!ehParteDoContrato(doProjeto, usuario.idUsuario)) {
+        // Quem enviou proposta ao projeto também vê (e aceita) o contrato que a formaliza.
+        const enviadas = idsPropostasEnviadas(usuario.idUsuario);
+        const propostasProjeto = await listarPropostasDoProjeto(dados.projetoId).catch(() => [] as Proposta[]);
+        const enviouProposta = (propostasProjeto ?? []).some((p) => enviadas.has(p.idProposta));
+        if (!ehParteDoContrato(doProjeto, usuario.idUsuario) && !enviouProposta) {
           setContrato(null);
           setSemAcesso(true);
           return;
@@ -68,9 +77,14 @@ export default function ContratoDetalhePage() {
         setEhDono(doProjeto.some((v) => v.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR));
       }
       setContrato(dados);
-      const [rProjeto, rTermos] = await Promise.allSettled([buscarProjeto(dados.projetoId), listarTermos()]);
+      const [rProjeto, rTermos, rPropostas] = await Promise.allSettled([
+        buscarProjeto(dados.projetoId),
+        listarTermosDoContrato(id),
+        listarPropostasDoProjeto(dados.projetoId),
+      ]);
       setProjeto(rProjeto.status === "fulfilled" ? rProjeto.value : null);
-      setTermos(rTermos.status === "fulfilled" ? (rTermos.value ?? []).filter((t) => t.contratoId === id) : []);
+      setTermos(rTermos.status === "fulfilled" ? rTermos.value ?? [] : []);
+      setPropostas(rPropostas.status === "fulfilled" ? rPropostas.value ?? [] : []);
       setErroTermos(rTermos.status !== "fulfilled");
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) setNaoEncontrado(true);
@@ -85,6 +99,28 @@ export default function ContratoDetalhePage() {
   }, [isAuthenticated, carregar]);
 
   const podeGerenciar = isAdmin || ehDono;
+  // PUT /contrato/{id}/aceitar: ADMIN e USUARIO; quem aceita é a outra parte, não o criador.
+  const podeAceitar =
+    contrato?.statusContrato === "PENDENTE" && (isAdmin || (!!usuario?.roles?.includes("USUARIO") && !ehDono));
+
+  async function aceitar() {
+    if (!contrato) return;
+    const ok = await confirmar("Aceitar este contrato? O valor da proposta vinculada será somado ao arrecadado do projeto.", {
+      titulo: "Aceitar contrato",
+      confirmarLabel: "Aceitar",
+    });
+    if (!ok) return;
+    setAceitando(true);
+    try {
+      const atualizado = await aceitarContrato(contrato.idContrato);
+      setContrato({ ...contrato, ...atualizado });
+      notificar("Contrato aceito.", "sucesso");
+    } catch (error) {
+      notificar(mensagemErro(error, "Não foi possível aceitar o contrato."));
+    } finally {
+      setAceitando(false);
+    }
+  }
 
   async function salvar(dados: ContratoRequest) {
     if (!contrato) return;
@@ -154,8 +190,21 @@ export default function ContratoDetalhePage() {
         <>
           <article className={`${cls.card} p-5 sm:p-7`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className={contrato.active ? cls.chipAtivo : cls.chipInativo}>{contrato.active ? "Ativo" : "Inativo"}</span>
+              <span className="flex flex-wrap gap-1.5">
+                {contrato.statusContrato && <ChipStatusNegociacao status={contrato.statusContrato} />}
+                <span className={contrato.active ? cls.chipAtivo : cls.chipInativo}>{contrato.active ? "Ativo" : "Inativo"}</span>
+              </span>
 
+              {!editando && (podeGerenciar || podeAceitar) && (
+                <div className="flex flex-wrap gap-2">
+                  {podeAceitar && (
+                    <button type="button" onClick={aceitar} disabled={aceitando} className={`${cls.btnPrimario} !text-[13px]`}>
+                      {aceitando ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} aria-hidden="true" />}
+                      Aceitar contrato
+                    </button>
+                  )}
+                </div>
+              )}
               {!editando && podeGerenciar && (
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => setEditando(true)} className={`${cls.btnSecundario} !text-[13px]`}>
@@ -174,6 +223,7 @@ export default function ContratoDetalhePage() {
                 contrato={contrato}
                 projetos={[]}
                 projetoFixo={contrato.projetoId}
+                propostas={propostas}
                 onEnviar={salvar}
                 onCancelar={() => setEditando(false)}
               />

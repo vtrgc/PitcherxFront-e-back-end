@@ -47,9 +47,9 @@ export interface Notificacao {
   idNotificacao: number;
   titulo: string;
   mensagem: string;
-  /** CONEXAO_SOLICITADA | CONEXAO_ACEITA | CONEXAO_RECUSADA (únicos tipos gerados hoje). */
+  /** Ver TIPO_NOTIFICACAO (conexões, contrapropostas, denúncias, identidade e nível de conta). */
   tipo: string;
-  /** Para os tipos de conexão, é o ID da conexão. */
+  /** Conexão: ID da conexão · contraproposta: ID da contraproposta · denúncia: ID da denúncia · identidade/nível: ID do usuário. */
   referenciaId: number | null;
   lida: boolean;
   dataCriacao: string | null;
@@ -59,6 +59,17 @@ export const TIPO_NOTIFICACAO = {
   CONEXAO_SOLICITADA: "CONEXAO_SOLICITADA",
   CONEXAO_ACEITA: "CONEXAO_ACEITA",
   CONEXAO_RECUSADA: "CONEXAO_RECUSADA",
+  CONTRAPROPOSTA_RECEBIDA: "CONTRAPROPOSTA_RECEBIDA",
+  CONTRAPROPOSTA_ACEITA: "CONTRAPROPOSTA_ACEITA",
+  CONTRAPROPOSTA_REJEITADA: "CONTRAPROPOSTA_REJEITADA",
+  DENUNCIA_NOVA: "DENUNCIA_NOVA",
+  DENUNCIA_APELACAO: "DENUNCIA_APELACAO",
+  DENUNCIA_RESULTADO: "DENUNCIA_RESULTADO",
+  COMPROVANTE_IDENTIDADE_NOVO: "COMPROVANTE_IDENTIDADE_NOVO",
+  IDENTIDADE_APROVADA: "IDENTIDADE_APROVADA",
+  IDENTIDADE_REPROVADA: "IDENTIDADE_REPROVADA",
+  NIVEL_CONTA_ALTERADO: "NIVEL_CONTA_ALTERADO",
+  NIVEL_CONTA_EVOLUICAO: "NIVEL_CONTA_EVOLUICAO",
 } as const;
 
 /** Página normalizada (o Spring pode serializar `Page` em dois formatos; ver lib/pagina). */

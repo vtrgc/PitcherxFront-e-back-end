@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { Flag, Loader2, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import {
+  CATEGORIAS_PADRAO,
   DETALHES_DENUNCIA_MAX,
-  MOTIVOS_DENUNCIA,
-  MotivoDenuncia,
   TipoConteudoDenuncia,
   enviarDenuncia,
+  listarCategoriasDenuncia,
   validarDenuncia,
 } from "../../services/denuncia.service";
+import { mensagemErro } from "../../lib/api";
+import { CategoriaDenuncia } from "../../types/Denuncia";
 import Alerta from "../ui/Alerta";
 import { cls } from "../ui/estilos";
 import { useFeedback } from "../ui/FeedbackProvider";
@@ -18,12 +21,13 @@ import { useFeedback } from "../ui/FeedbackProvider";
 const NOME_CONTEUDO: Record<TipoConteudoDenuncia, string> = {
   POSTAGEM: "publicação",
   COMENTARIO: "comentário",
-  SUBCOMENTARIO: "resposta",
+  PERFIL: "perfil",
   PROJETO: "projeto",
 };
 
 /**
- * Diálogo de denúncia: motivo obrigatório, detalhes opcionais (obrigatórios em "Outro"),
+ * Diálogo de denúncia (POST /denuncia): categoria obrigatória (GET /denuncia/categorias),
+ * detalhes opcionais (obrigatórios em "Outros"),
  * confirmação com proteção contra clique duplo, Esc/clique fora para fechar.
  */
 export default function ModalDenuncia({
@@ -56,7 +60,8 @@ function Conteudo({
 }) {
   const { usuario } = useAuth();
   const { notificar } = useFeedback();
-  const [motivo, setMotivo] = useState<MotivoDenuncia | "">("");
+  const [motivo, setMotivo] = useState("");
+  const [categorias, setCategorias] = useState<CategoriaDenuncia[]>(CATEGORIAS_PADRAO);
   const [detalhes, setDetalhes] = useState("");
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -64,6 +69,14 @@ function Conteudo({
   const caixaRef = useRef<HTMLDivElement>(null);
   const base = useId();
   const nome = NOME_CONTEUDO[tipo];
+
+  useEffect(() => {
+    let ativo = true;
+    listarCategoriasDenuncia(tipo).then((lista) => ativo && setCategorias(lista));
+    return () => {
+      ativo = false;
+    };
+  }, [tipo]);
 
   useEffect(() => {
     const anterior = document.activeElement as HTMLElement | null;
@@ -110,12 +123,12 @@ function Conteudo({
     setEnviando(true);
     setErro("");
     try {
-      await enviarDenuncia(usuario.idUsuario, { tipo, conteudoId, motivo: motivo as MotivoDenuncia, detalhes });
-      notificar(`Denúncia registrada. Este ${nome === "publicação" ? "conteúdo" : nome} foi ocultado para você.`, "sucesso");
+      await enviarDenuncia({ tipoDenuncia: tipo, alvoId: conteudoId, categoria: motivo, descricao: detalhes });
+      notificar("Denúncia enviada. A moderação vai analisar e você será notificado do resultado.", "sucesso");
       onDenunciado?.();
       onFechar();
     } catch (error) {
-      setErro(error instanceof Error ? error.message : "Não foi possível registrar a denúncia.");
+      setErro(mensagemErro(error, error instanceof Error && !("status" in error) ? error.message : "Não foi possível registrar a denúncia."));
     } finally {
       enviandoRef.current = false;
       setEnviando(false);
@@ -145,8 +158,12 @@ function Conteudo({
           </button>
         </div>
         <p id={`${base}-descricao`} className="mt-1.5 text-[13.5px] leading-relaxed text-ink-500">
-          Por que você está denunciando este(a) {nome}? Depois de confirmar, ele deixa de aparecer para você (é possível
-          desfazer).
+          Por que você está denunciando este(a) {nome}? Sua identidade é mantida em sigilo e a moderação analisa cada caso.
+          Acompanhe em{" "}
+          <Link href="/denuncias" className="font-semibold text-brand-700 hover:underline">
+            Minhas denúncias
+          </Link>
+          .
         </p>
 
         <form
@@ -160,8 +177,8 @@ function Conteudo({
           {erro && <Alerta className="mb-3">{erro}</Alerta>}
           <fieldset disabled={enviando}>
             <legend className="sr-only">Motivo</legend>
-            <div className="space-y-1.5">
-              {MOTIVOS_DENUNCIA.map((m) => (
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {categorias.map((c) => ({ id: c.codigo, rotulo: c.descricao })).map((m) => (
                 <label
                   key={m.id}
                   className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-[14px] transition-colors ${
@@ -185,7 +202,7 @@ function Conteudo({
             </div>
 
             <label htmlFor={`${base}-detalhes`} className={`${cls.label} mt-4`}>
-              Detalhes {motivo === "OUTRO" ? "" : <span className="font-normal text-ink-400">(opcional)</span>}
+              Detalhes {motivo === "OUTROS" ? "" : <span className="font-normal text-ink-400">(opcional)</span>}
             </label>
             <textarea
               id={`${base}-detalhes`}

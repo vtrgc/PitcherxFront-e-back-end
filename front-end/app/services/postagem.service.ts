@@ -107,3 +107,15 @@ export function substituirImagensPostagem(id: number, arquivos: File[]) {
 export function removerImagensPostagem(id: number) {
   return api<void>(`/postagem/${id}/imagens`, { method: "DELETE" });
 }
+
+/** PUT /postagem/{id}/videos (multipart, campo "arquivos") — substitui os vídeos da postagem. */
+export function substituirVideosPostagem(id: number, arquivos: File[]) {
+  const formData = new FormData();
+  arquivos.forEach((arquivo) => formData.append("arquivos", arquivo));
+  return api<Post>(`/postagem/${id}/videos`, { method: "PUT", body: formData, timeoutMs: 300000 });
+}
+
+/** DELETE /postagem/{id}/videos. */
+export function removerVideosPostagem(id: number) {
+  return api<void>(`/postagem/${id}/videos`, { method: "DELETE" });
+}

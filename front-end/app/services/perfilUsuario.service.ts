@@ -88,3 +88,15 @@ export function atualizarBanner(idPerfilUsuario: number, arquivo: File) {
 export function removerBanner(idPerfilUsuario: number) {
   return api<void>(`/perfil-usuario/${idPerfilUsuario}/banner`, { method: "DELETE" });
 }
+
+/** POST /perfil-usuario/{id}/video (multipart, campo "arquivo") — vídeo de apresentação. */
+export function atualizarVideoPerfil(idPerfilUsuario: number, arquivo: File) {
+  const formData = new FormData();
+  formData.append("arquivo", arquivo);
+  return api<PerfilUsuario>(`/perfil-usuario/${idPerfilUsuario}/video`, { method: "POST", body: formData, timeoutMs: 300000 });
+}
+
+/** DELETE /perfil-usuario/{id}/video. */
+export function removerVideoPerfil(idPerfilUsuario: number) {
+  return api<void>(`/perfil-usuario/${idPerfilUsuario}/video`, { method: "DELETE" });
+}

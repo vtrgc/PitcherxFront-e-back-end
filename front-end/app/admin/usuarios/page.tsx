@@ -13,7 +13,8 @@ import { cls } from "../../components/ui/estilos";
 import { useFeedback } from "../../components/ui/FeedbackProvider";
 import { useRequireAdmin } from "../../hook/useRequireAdmin";
 import { mensagemErro } from "../../lib/api";
-import { Usuario } from "../../types/Usuario";
+import { NivelConta, Usuario } from "../../types/Usuario";
+import { listarNiveisConta, rotuloNivel } from "../../services/nivelConta.service";
 import {
   listarUsuarios,
   ativarDesativarUsuario,
@@ -22,6 +23,8 @@ import {
   obterRolePrincipal,
   ROLE_ID_MAP,
   ROLE_LABEL,
+  ROTULO_STATUS_IDENTIDADE,
+  alterarNivelConta,
 } from "../../services/usuario.service";
 
 type FiltroStatus = "todos" | "ativos" | "inativos";
@@ -40,6 +43,8 @@ export default function AdminUsuariosPage() {
 
   const [gerenciando, setGerenciando] = useState<Usuario | null>(null);
   const [roleNova, setRoleNova] = useState("");
+  const [niveis, setNiveis] = useState<NivelConta[]>([]);
+  const [nivelNovo, setNivelNovo] = useState<number | "">("");
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -56,6 +61,28 @@ export default function AdminUsuariosPage() {
   useEffect(() => {
     if (pronto) carregar();
   }, [pronto, carregar]);
+
+  useEffect(() => {
+    if (pronto) listarNiveisConta().then(setNiveis).catch(() => setNiveis([]));
+  }, [pronto]);
+
+  async function salvarNivel() {
+    if (!gerenciando || !nivelNovo) return;
+    const nivel = niveis.find((n) => n.idNivelConta === nivelNovo);
+    if (!(await confirmar(`Alterar o nível de "${gerenciando.nomeUsuario}" para ${rotuloNivel(nivel?.nome)}?`, { titulo: "Alterar nível", confirmarLabel: "Alterar" })))
+      return;
+    setProcessandoId(gerenciando.idUsuario);
+    try {
+      const atualizado = await alterarNivelConta(gerenciando.idUsuario, Number(nivelNovo));
+      setUsuarios((l) => l.map((u) => (u.idUsuario === gerenciando.idUsuario ? { ...u, ...atualizado } : u)));
+      setGerenciando((g) => (g ? { ...g, ...atualizado } : g));
+      notificar("Nível de conta alterado. O usuário foi notificado.", "sucesso");
+    } catch (error) {
+      notificar(mensagemErro(error, "Não foi possível alterar o nível de conta."));
+    } finally {
+      setProcessandoId(null);
+    }
+  }
 
   async function toggleAtivo(u: Usuario) {
     const acao = u.active ? "desativar" : "ativar";
@@ -142,8 +169,12 @@ export default function AdminUsuariosPage() {
             <h1 className="font-display text-[17px] font-bold text-ink-900">Usuários</h1>
             <p className="text-[0.8125rem] text-ink-500 mt-0.5">
               {usuarios.length} usuário{usuarios.length === 1 ? "" : "s"} cadastrado{usuarios.length === 1 ? "" : "s"}. Nome,
-              e-mail e telefone são editados pelo próprio usuário; aqui o administrador gerencia status e perfis. Contas novas ficam
-              inativas até o usuário confirmar o código enviado por e-mail.
+              e-mail e telefone são editados pelo próprio usuário; aqui o administrador gerencia status, perfis e nível de conta.
+              Contas novas ficam inativas até a identidade ser aprovada em{" "}
+              <Link href="/admin/identidades" className="font-semibold text-brand-700 hover:underline">
+                Análise de identidade
+              </Link>
+              .
             </p>
           </div>
         </div>
@@ -154,7 +185,7 @@ export default function AdminUsuariosPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 id="titulo-perfis" className={cls.h2}>
-                Perfis de {gerenciando.nomeUsuario}
+                Perfis e nível de {gerenciando.nomeUsuario}
               </h2>
               <p className={`${cls.textoSuave} mt-1`}>
                 O backend apenas <strong>adiciona</strong> perfis (POST /usuario/alterar-role); não há como remover um perfil
@@ -202,6 +233,41 @@ export default function AdminUsuariosPage() {
               </button>
             </div>
           )}
+
+          <div className="mt-6 border-t border-ink-100 pt-5">
+            <p className="text-[13.5px] font-semibold text-ink-800">
+              Nível de conta atual: <span className={cls.chip}>{rotuloNivel(gerenciando.nivelConta?.nome)}</span>
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <div>
+                <label htmlFor="nivel-novo" className={cls.label}>
+                  Alterar nível
+                </label>
+                <select
+                  id="nivel-novo"
+                  value={nivelNovo}
+                  onChange={(e) => setNivelNovo(e.target.value ? Number(e.target.value) : "")}
+                  className={`${cls.input} !w-auto !bg-white`}
+                >
+                  <option value="">{niveis.length === 0 ? "Níveis indisponíveis" : "Selecione"}</option>
+                  {niveis.map((n) => (
+                    <option key={n.idNivelConta} value={n.idNivelConta} disabled={n.idNivelConta === gerenciando.nivelConta?.idNivelConta}>
+                      {rotuloNivel(n.nome)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={salvarNivel}
+                disabled={!nivelNovo || processandoId === gerenciando.idUsuario}
+                className={cls.btnPrimario}
+              >
+                {processandoId === gerenciando.idUsuario ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                Salvar nível
+              </button>
+            </div>
+          </div>
         </section>
       )}
 
@@ -268,10 +334,16 @@ export default function AdminUsuariosPage() {
                   <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
                     <span
                       className={u.active ? cls.chipAtivo : cls.chipInativo}
-                      title={u.active ? "Conta ativa" : "Conta desativada ou aguardando a verificação do e-mail (código enviado no cadastro)"}
+                      title={u.active ? "Conta ativa" : "Conta desativada ou aguardando a aprovação da identidade"}
                     >
                       {u.active ? "Ativo" : "Inativo"}
                     </span>
+                    {u.statusAnaliseIdentidade && (
+                      <span className={cls.chipInativo} title="Análise de identidade">
+                        ID: {ROTULO_STATUS_IDENTIDADE[u.statusAnaliseIdentidade] ?? u.statusAnaliseIdentidade}
+                      </span>
+                    )}
+                    {u.nivelConta && <span className={cls.chipInativo}>{rotuloNivel(u.nivelConta.nome)}</span>}
                     <span className={cls.chip} title={(u.roles ?? []).join(", ")}>
                       {ROLE_LABEL[obterRolePrincipal(u.roles)] ?? obterRolePrincipal(u.roles)}
                       {(u.roles ?? []).length > 1 && ` +${u.roles.length - 1}`}
@@ -285,12 +357,13 @@ export default function AdminUsuariosPage() {
                       onClick={() => {
                         setGerenciando(u);
                         setRoleNova("");
+                        setNivelNovo("");
                         window.scrollTo({ top: 0, behavior: "smooth" });
                       }}
                       disabled={ocupado || ehVoce}
                       className={cls.btnIcone}
-                      aria-label={`Gerenciar perfis de ${u.nomeUsuario}`}
-                      title={ehVoce ? "Você não pode alterar seus próprios perfis" : "Gerenciar perfis"}
+                      aria-label={`Gerenciar perfis e nível de ${u.nomeUsuario}`}
+                      title={ehVoce ? "Você não pode alterar seus próprios perfis" : "Gerenciar perfis e nível"}
                     >
                       <UserPlus size={16} />
                     </button>

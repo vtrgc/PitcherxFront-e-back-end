@@ -10,7 +10,9 @@ import { mensagemErro } from "../../lib/api";
 import { formatarMoeda } from "../../lib/validacao";
 import { Proposta } from "../../types/Proposta";
 import { ContraProposta } from "../../types/ContraProposta";
-import { excluirProposta, listarPropostas } from "../../services/proposta.service";
+import { listarPropostas } from "../../services/proposta.service";
+import { ChipStatusNegociacao } from "../../components/projeto/ChipsNegociacao";
+import Link from "next/link";
 import { excluirContraProposta, listarContraPropostas } from "../../services/contraProposta.service";
 
 /**
@@ -29,7 +31,7 @@ export default function AdminPropostasPage() {
 
   // Propostas e contrapropostas são carregadas juntas (a contagem aparece em cada proposta).
   const listar = useCallback(async () => {
-    const [propostas, contrapropostas] = await Promise.all([listarPropostas(), listarContraPropostas().catch(() => [] as ContraProposta[])]);
+    const [propostas, contrapropostas] = await Promise.all([listarPropostas({ forcar: true }), listarContraPropostas().catch(() => [] as ContraProposta[])]);
     setContras(contrapropostas ?? []);
     return propostas ?? [];
   }, []);
@@ -62,7 +64,7 @@ export default function AdminPropostasPage() {
   return (
     <CrudAdmin<Proposta, Record<string, string>>
       titulo="Propostas"
-      descricao="Propostas de negócio e as contrapropostas recebidas. Excluir uma proposta também remove as contrapropostas dela."
+      descricao="Propostas enviadas aos projetos, com status e contrapropostas. Somente o autor pode excluir a própria proposta; o administrador pode remover contrapropostas."
       icone={HandCoins}
       rotuloSingular="proposta"
       rotuloPlural="propostas"
@@ -87,6 +89,12 @@ export default function AdminPropostasPage() {
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-display text-[14.5px] font-semibold text-ink-900">Proposta #{p.idProposta}</h3>
               <span className={cls.chip}>{p.valorProposta !== null && p.valorProposta !== undefined ? formatarMoeda(p.valorProposta) : "Sem valor"}</span>
+              <ChipStatusNegociacao status={p.statusProposta} />
+              {p.projetoId != null && (
+                <Link href={`/projetos/${p.projetoId}`} className="text-[12.5px] font-semibold text-brand-700 hover:underline">
+                  Projeto #{p.projetoId}
+                </Link>
+              )}
               <span className="text-[12px] text-ink-400">
                 {lista.length} contraproposta{lista.length === 1 ? "" : "s"}
               </span>
@@ -102,6 +110,7 @@ export default function AdminPropostasPage() {
                         <p className="text-[12px] font-semibold text-ink-700">
                           #{c.idContraProposta} ·{" "}
                           {c.valorContraProposta !== null && c.valorContraProposta !== undefined ? formatarMoeda(c.valorContraProposta) : "Sem valor"}
+                          {c.usuarioNome && ` · por ${c.usuarioNome}`} · <ChipStatusNegociacao status={c.status} />
                         </p>
                         <p className="text-[12.5px] text-ink-600 whitespace-pre-line break-words">{c.descricaoContraProposta}</p>
                       </div>
@@ -127,8 +136,6 @@ export default function AdminPropostasPage() {
       paraFormulario={() => ({})}
       salvar={async () => undefined}
       podeEscrever={false}
-      rotuloExcluir={(p) => `Proposta #${p.idProposta}`}
-      excluir={(p) => excluirProposta(p.idProposta)}
     />
   );
 }

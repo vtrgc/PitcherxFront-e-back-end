@@ -71,6 +71,8 @@ describe("projeto.service com o backend atual", () => {
       tipoProjetoId: 1,
       metaFinanceira: 50000,
       valorArrecadado: 1000,
+      investimentoMinimo: 500,
+      participacaoOferecida: 10,
       riscoProjetoIds: [3],
     });
     const [url, init] = fetchMock.mock.calls[0];

@@ -13,6 +13,11 @@ export interface ProjetoRequest {
   /** Obrigatório (@NotNull) no ProjetoRequestDTO. */
   metaFinanceira: number;
   valorArrecadado?: number | null;
+  /** Obrigatório (@NotNull). */
+  investimentoMinimo: number;
+  /** Percentual inteiro (Integer, @NotNull). */
+  participacaoOferecida: number;
+  usoRecursos?: string | null;
   /** IDs do catálogo GET /risco-projeto (@NotNull: envie [] quando não houver riscos). */
   riscoProjetoIds: number[];
 }
@@ -29,8 +34,14 @@ export interface Projeto {
   urlImagemProjeto: string | null;
   /** Galeria (PUT/DELETE /projeto/{id}/imagens, até 10). */
   imagens?: string[] | null;
+  urlVideoProjeto?: string | null;
+  /** Vídeos (PUT/DELETE /projeto/{id}/videos). */
+  videos?: string[] | null;
   metaFinanceira?: number | null;
   valorArrecadado?: number | null;
+  investimentoMinimo?: number | null;
+  participacaoOferecida?: number | null;
+  usoRecursos?: string | null;
   riscos?: RiscoProjeto[] | null;
   /**
    * Preenchido no front (projeto.service): ficha financeira lida do fim da descrição.

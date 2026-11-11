@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   camposDaFicha,
   camposFinanceirosApi,
@@ -16,37 +16,48 @@ import { ehParteDoContrato } from "../app/services/projetoUsuario.service";
 import { normalizarProjeto } from "../app/services/projeto.service";
 import { linkDaPostagem } from "../app/components/PostCard";
 
-describe("ficha financeira do projeto (guardada na descrição)", () => {
-  it("monta e lê de volta sem mostrar o bloco no texto (meta/captado ficam fora do bloco)", () => {
-    const descricao = montarDescricaoProjeto("App de entregas.", { meta: 100000, captado: 65000, participacao: 15 });
-    expect(descricao.startsWith("App de entregas.")).toBe(true);
-    const lido = lerDescricaoProjeto(descricao);
-    expect(lido.texto).toBe("App de entregas.");
-    expect(lido.ficha).toEqual({ participacao: 15 });
-    expect(textoDaDescricao(descricao)).toBe("App de entregas.");
+describe("ficha financeira do projeto (campos reais do DTO)", () => {
+  it("não grava mais o bloco na descrição", () => {
+    expect(montarDescricaoProjeto("  App de entregas.  ", { meta: 100000, participacao: 15 })).toBe("App de entregas.");
   });
 
-  it("campos financeiros reais do DTO", () => {
-    expect(camposFinanceirosApi({ meta: 100000, captado: 65000 })).toEqual({
+  it("lê o bloco de projetos antigos sem mostrá-lo no texto", () => {
+    const antiga = 'App de entregas.\n\n<!--pitcherx:ficha {"v":1,"participacao":15,"usoRecursos":"fase 1 --\\u003e fase 2"}-->';
+    const lido = lerDescricaoProjeto(antiga);
+    expect(lido.texto).toBe("App de entregas.");
+    expect(lido.ficha).toEqual({ participacao: 15, usoRecursos: "fase 1 --> fase 2" });
+    expect(textoDaDescricao(antiga)).toBe("App de entregas.");
+  });
+
+  it("campos financeiros enviados no ProjetoRequestDTO", () => {
+    expect(camposFinanceirosApi({ meta: 100000, captado: 65000, investimentoMinimo: 5000, participacao: 15, usoRecursos: " marketing " })).toEqual({
       metaFinanceira: 100000,
       valorArrecadado: 65000,
+      investimentoMinimo: 5000,
+      participacaoOferecida: 15,
+      usoRecursos: "marketing",
     });
-    expect(camposFinanceirosApi({ meta: 10 })).toEqual({ metaFinanceira: 10, valorArrecadado: null });
+    expect(camposFinanceirosApi({ meta: 10 })).toEqual({
+      metaFinanceira: 10,
+      valorArrecadado: null,
+      investimentoMinimo: 0,
+      participacaoOferecida: 0,
+      usoRecursos: null,
+    });
   });
 
   it("campos reais têm prioridade sobre o bloco legado", () => {
     const legado = lerDescricaoProjeto('X\n\n<!--pitcherx:ficha {"v":1,"meta":50,"captado":5,"participacao":10}-->').ficha;
-    expect(combinarFicha({ metaFinanceira: 200, valorArrecadado: 20 }, legado)).toEqual({
+    expect(combinarFicha({ metaFinanceira: 200, valorArrecadado: 20, participacaoOferecida: 25, investimentoMinimo: 100 }, legado)).toEqual({
       meta: 200,
       captado: 20,
-      participacao: 10,
+      participacao: 25,
+      investimentoMinimo: 100,
     });
     expect(combinarFicha({ metaFinanceira: null, valorArrecadado: null }, legado)).toEqual({ meta: 50, captado: 5, participacao: 10 });
   });
 
-  it("sem dados financeiros, a descrição fica igual", () => {
-    expect(montarDescricaoProjeto("  Só texto  ", null)).toBe("Só texto");
-    expect(montarDescricaoProjeto("Só texto", {})).toBe("Só texto");
+  it("descrição sem bloco", () => {
     expect(lerDescricaoProjeto("Projeto antigo sem ficha")).toEqual({ texto: "Projeto antigo sem ficha", ficha: null });
   });
 
@@ -54,11 +65,6 @@ describe("ficha financeira do projeto (guardada na descrição)", () => {
     const lido = lerDescricaoProjeto("Texto\n\n<!--pitcherx:ficha {quebrado}-->");
     expect(lido.texto).toBe("Texto");
     expect(lido.ficha).toBeNull();
-  });
-
-  it("texto com '-->' no uso dos recursos não quebra o bloco", () => {
-    const d = montarDescricaoProjeto("X", { usoRecursos: "fase 1 --> fase 2" });
-    expect(lerDescricaoProjeto(d).ficha?.usoRecursos).toBe("fase 1 --> fase 2");
   });
 
   it("resumo: restante e percentual só com meta e captado", () => {
@@ -69,11 +75,14 @@ describe("ficha financeira do projeto (guardada na descrição)", () => {
   });
 
   it("valida o formulário (pt-BR) e rejeita valores incoerentes", () => {
-    expect(validarCamposFicha({ meta: "100.000", captado: "65.000,50", participacao: "15,5%", investimentoMinimo: "", usoRecursos: "" }).ficha).toEqual({
+    expect(validarCamposFicha({ meta: "100.000", captado: "65.000,50", participacao: "15%", investimentoMinimo: "5.000", usoRecursos: "" }).ficha).toEqual({
       meta: 100000,
       captado: 65000.5,
-      participacao: 15.5,
+      participacao: 15,
+      investimentoMinimo: 5000,
     });
+    // participacaoOferecida é Integer no backend.
+    expect(validarCamposFicha({ meta: "10", captado: "", participacao: "15,5", investimentoMinimo: "", usoRecursos: "" }).erros.participacao).toBeTruthy();
     expect(validarCamposFicha({ meta: "", captado: "10", participacao: "", investimentoMinimo: "", usoRecursos: "" }).erros.meta).toBeTruthy();
     expect(validarCamposFicha({ meta: "10", captado: "", participacao: "120", investimentoMinimo: "", usoRecursos: "" }).erros.participacao).toBeTruthy();
     expect(validarCamposFicha({ meta: "abc", captado: "", participacao: "", investimentoMinimo: "", usoRecursos: "" }).erros.meta).toBeTruthy();
@@ -81,14 +90,14 @@ describe("ficha financeira do projeto (guardada na descrição)", () => {
   });
 
   it("campos do formulário a partir da ficha salva", () => {
-    expect(camposDaFicha({ meta: 100000, participacao: 15.5 })).toMatchObject({ meta: "100000", participacao: "15,5", captado: "" });
+    expect(camposDaFicha({ meta: 100000, participacao: 15 })).toMatchObject({ meta: "100000", participacao: "15", captado: "" });
   });
 
-  it("projeto.service separa texto e ficha em toda resposta", () => {
+  it("projeto.service monta a ficha a partir dos campos reais", () => {
     const p = normalizarProjeto({
       idProjeto: 1,
       nomeProjeto: "A",
-      descricaoProjeto: montarDescricaoProjeto("Desc", { participacao: 5 }),
+      descricaoProjeto: "Desc",
       dataInicioProjeto: "01/01/2026",
       dataFimProjeto: "01/02/2026",
       tipoProjetoId: 1,
@@ -96,10 +105,13 @@ describe("ficha financeira do projeto (guardada na descrição)", () => {
       urlImagemProjeto: null,
       metaFinanceira: 50,
       valorArrecadado: null,
+      investimentoMinimo: 10,
+      participacaoOferecida: 5,
+      usoRecursos: "Equipe",
       riscos: [],
     });
     expect(p.descricaoProjeto).toBe("Desc");
-    expect(p.ficha).toEqual({ meta: 50, participacao: 5 });
+    expect(p.ficha).toEqual({ meta: 50, participacao: 5, investimentoMinimo: 10, usoRecursos: "Equipe" });
   });
 });
 
@@ -171,31 +183,31 @@ describe("compartilhamento", () => {
 });
 
 describe("denúncias", () => {
-  const armazenamento = new Map<string, string>();
-  beforeEach(() => {
-    armazenamento.clear();
-    vi.stubGlobal("window", {
-      localStorage: {
-        getItem: (k: string) => armazenamento.get(k) ?? null,
-        setItem: (k: string, v: string) => armazenamento.set(k, v),
-        removeItem: (k: string) => armazenamento.delete(k),
-      },
-      dispatchEvent: () => true,
-    });
-  });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("registra, impede duplicada e desfaz", async () => {
-    const { enviarDenuncia, jaDenunciado, desfazerDenuncia, validarDenuncia } = await import("../app/services/denuncia.service");
+  it("valida categoria e detalhes", async () => {
+    const { validarDenuncia } = await import("../app/services/denuncia.service");
     expect(validarDenuncia("", "")).toBeTruthy();
-    expect(validarDenuncia("OUTRO", "  ")).toBeTruthy();
+    expect(validarDenuncia("OUTROS", "  ")).toBeTruthy();
     expect(validarDenuncia("SPAM", "")).toBeNull();
-    await enviarDenuncia(7, { tipo: "POSTAGEM", conteudoId: 3, motivo: "SPAM", detalhes: "" });
-    expect(jaDenunciado(7, "POSTAGEM", 3)).toBe(true);
-    expect(jaDenunciado(8, "POSTAGEM", 3)).toBe(false);
-    expect(jaDenunciado(7, "COMENTARIO", 3)).toBe(false);
-    await expect(enviarDenuncia(7, { tipo: "POSTAGEM", conteudoId: 3, motivo: "SPAM", detalhes: "" })).rejects.toThrow(/já denunciou/);
-    desfazerDenuncia(7, "POSTAGEM", 3);
-    expect(jaDenunciado(7, "POSTAGEM", 3)).toBe(false);
+    expect(validarDenuncia("SPAM", "x".repeat(1001))).toBeTruthy();
+  });
+
+  it("envia POST /denuncia com o DenunciaRequestDTO", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ idDenuncia: 9, tipoDenuncia: "POSTAGEM", alvoId: 3, categoria: "SPAM", status: "PENDENTE" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { enviarDenuncia, jaDenunciado } = await import("../app/services/denuncia.service");
+    const d = await enviarDenuncia({ tipoDenuncia: "POSTAGEM", alvoId: 3, categoria: "SPAM", descricao: "  spam  " });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toMatch(/\/denuncia$/);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ tipoDenuncia: "POSTAGEM", alvoId: 3, categoria: "SPAM", descricao: "spam" });
+    expect(jaDenunciado([d], "POSTAGEM", 3)).toBe(true);
+    expect(jaDenunciado([d], "PROJETO", 3)).toBe(false);
   });
 });

@@ -19,12 +19,16 @@ import {
   HandCoins,
   AlertTriangle,
   UserPlus,
+  Flag,
+  FileCheck2,
 } from "lucide-react";
 
 
 
 export const SECOES_ADMIN = [
   { href: "/admin/usuarios", titulo: "Usuários", icon: Users },
+  { href: "/admin/identidades", titulo: "Análise de identidade", icon: FileCheck2 },
+  { href: "/admin/denuncias", titulo: "Denúncias", icon: Flag },
   { href: "/admin/perfis", titulo: "Perfis profissionais", icon: IdCard },
   { href: "/admin/projetos", titulo: "Projetos", icon: Briefcase },
   { href: "/admin/solicitacoes", titulo: "Solicitações de vínculo", icon: UserPlus },

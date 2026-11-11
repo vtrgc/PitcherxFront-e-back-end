@@ -66,7 +66,13 @@ function LoginConteudo() {
       const admin = usuario.roles?.includes("ADMIN");
       router.replace(admin ? "/admin" : destino || "/feed");
     } catch (error) {
-      if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 401)) {
+      if (error instanceof ApiError && error.status === 400 && /ativad/i.test(error.payload?.message ?? "")) {
+        // Conta criada, mas ainda inativa: o backend só libera o login depois que a
+        // administração aprova a identidade (ou reativa a conta).
+        setErro(
+          "Sua conta ainda não foi ativada. A administração está analisando sua identidade — você receberá um e-mail assim que ela for aprovada."
+        );
+      } else if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 401)) {
         // O backend diferencia "e-mail inexistente" (404) de "senha errada" (400);
         // mostramos a mesma mensagem para não revelar quais e-mails têm conta.
         setErro("E-mail ou senha inválidos.");
@@ -99,7 +105,8 @@ function LoginConteudo() {
           )}
           {acabouDeCadastrar && !erro && (
             <AuthAlert variant="success">
-              Conta criada! Entre com seu e-mail e senha e digite o código de verificação que enviamos por e-mail.
+              Conta criada! Ela será ativada assim que a administração aprovar sua identidade (você recebe um e-mail). Guarde o
+              código de verificação que enviamos: ele será pedido no primeiro acesso.
             </AuthAlert>
           )}
           {erro && <AuthAlert>{erro}</AuthAlert>}

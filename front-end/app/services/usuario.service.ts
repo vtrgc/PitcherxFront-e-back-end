@@ -2,6 +2,8 @@ import { api, setToken, clearToken, ApiError } from "../lib/api";
 import { Usuario } from "../types/Usuario";
 import { UsuarioRequest } from "../types/UsuarioRequest";
 import { LoginRequest, LoginResponse } from "../types/Login";
+import { Pagina } from "../types/Conexao";
+import { normalizarPagina } from "../lib/pagina";
 
 export function listarUsuarios() {
   return api<Usuario[]>("/usuario");
@@ -189,3 +191,54 @@ export function adicionarRoleUsuario(idUsuario: number, idRole: number) {
     method: "POST",
   });
 }
+
+// ---------------------------------------------------------------------------
+// Verificação de identidade e nível de conta
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /usuario/{id}/comprovante-identidade (multipart, campo "arquivo", imagem).
+ * Permitido ao próprio usuário ou ao ADMIN. Volta o status para PENDENTE e conta uma
+ * tentativa (máximo de 5 após reprovação).
+ */
+export async function enviarComprovanteIdentidade(id: number, arquivo: File) {
+  const formData = new FormData();
+  formData.append("arquivo", arquivo);
+  const r = await api<Usuario>(`/usuario/${id}/comprovante-identidade`, { method: "POST", body: formData, timeoutMs: 120000 });
+  invalidarCacheUsuario(id);
+  return r;
+}
+
+/** GET /usuario/admin/identidade-pendentes (Page<UsuarioResponseDTO>). */
+export async function listarIdentidadesPendentes(page = 0, size = 20): Promise<Pagina<Usuario>> {
+  return normalizarPagina<Usuario>(await api<unknown>(`/usuario/admin/identidade-pendentes?page=${page}&size=${size}`));
+}
+
+/** POST /usuario/admin/analise-identidade/{idUsuario} — APROVADA ativa a conta; REPROVADA exige justificativa. */
+export async function analisarIdentidade(idUsuario: number, status: "APROVADA" | "REPROVADA", justificativa?: string) {
+  const r = await api<Usuario>(`/usuario/admin/analise-identidade/${idUsuario}`, {
+    method: "POST",
+    body: JSON.stringify({ status, justificativa: justificativa?.trim() || undefined }),
+  });
+  invalidarCacheUsuario(idUsuario);
+  return r;
+}
+
+/** PUT /usuario/admin/nivel-conta/{idUsuario} — { nivelId }. */
+export async function alterarNivelConta(idUsuario: number, nivelId: number) {
+  const r = await api<Usuario>(`/usuario/admin/nivel-conta/${idUsuario}`, {
+    method: "PUT",
+    body: JSON.stringify({ nivelId }),
+  });
+  invalidarCacheUsuario(idUsuario);
+  return r;
+}
+
+export const ROTULO_STATUS_IDENTIDADE: Record<string, string> = {
+  PENDENTE: "Em análise",
+  APROVADA: "Aprovada",
+  REPROVADA: "Reprovada",
+};
+
+/** Limite de reenvios do comprovante após reprovação (UsuarioService). */
+export const LIMITE_TENTATIVAS_IDENTIDADE = 5;

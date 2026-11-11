@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { FileSignature, Plus, Pencil, Trash2, Briefcase, ChevronRight } from "lucide-react";
+import { FileSignature, Plus, Pencil, Trash2, Briefcase, ChevronRight, Check, Loader2 } from "lucide-react";
 
 import PageShell from "../components/PageShell";
 import Paginacao from "../components/ui/Paginacao";
@@ -20,10 +20,13 @@ import { ApiError, mensagemErro } from "../lib/api";
 import { formatarDataHora } from "../lib/date";
 import { Contrato, ContratoRequest } from "../types/Contrato";
 import { Projeto } from "../types/Projeto";
-import { listarContratos, criarContrato, atualizarContrato, excluirContrato } from "../services/contrato.service";
+import { listarContratos, criarContrato, atualizarContrato, excluirContrato, aceitarContrato } from "../services/contrato.service";
+import { idsPropostasEnviadas, listarPropostas } from "../services/proposta.service";
+import { Proposta } from "../types/Proposta";
+import { ChipStatusNegociacao } from "../components/projeto/ChipsNegociacao";
 import { listarProjetos } from "../services/projeto.service";
 import { listarIdsProjetosCriados, listarIdsProjetosParte } from "../services/projetoUsuario.service";
-import { listarTermos } from "../services/termo.service";
+import { listarTermosDoContrato } from "../services/termo.service";
 
 export default function ContratosPage() {
   return (
@@ -47,6 +50,7 @@ function ContratosPageContent() {
   const { notificar, confirmar } = useFeedback();
   const searchParams = useSearchParams();
   const projetoIdParam = Number(searchParams.get("projetoId")) || undefined;
+  const propostaIdParam = Number(searchParams.get("propostaId")) || undefined;
   const idUsuario = usuario?.idUsuario;
 
   const [contratos, setContratos] = useState<Contrato[]>([]);
@@ -54,6 +58,8 @@ function ContratosPageContent() {
   const [meusProjetos, setMeusProjetos] = useState<Set<number>>(new Set());
   // Projetos em que sou parte (criador, sócio ou investidor): define o que posso VER.
   const [projetosParte, setProjetosParte] = useState<Set<number>>(new Set());
+  const [propostas, setPropostas] = useState<Proposta[]>([]);
+  const [aceitando, setAceitando] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState("");
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -67,13 +73,21 @@ function ContratosPageContent() {
     try {
       // Sem a lista de vínculos não há como saber o que o usuário pode ver: a falha
       // interrompe a carga (nada de "mostrar tudo" por engano).
-      const [listaContratos, listaProjetos, meus, parte] = await Promise.all([
+      const [listaContratos, listaProjetos, meus, parte, listaPropostas] = await Promise.all([
         listarContratos(),
         listarProjetos().catch(() => [] as Projeto[]),
         isAdmin ? Promise.resolve(new Set<number>()) : listarIdsProjetosCriados(idUsuario),
         isAdmin ? Promise.resolve(new Set<number>()) : listarIdsProjetosParte(idUsuario),
+        listarPropostas().catch(() => [] as Proposta[]),
       ]);
-      const visiveisParaMim = (listaContratos ?? []).filter((c) => isAdmin || parte.has(c.projetoId));
+      // Projetos para os quais enviei proposta: o contrato que a formaliza também é meu para aceitar.
+      const enviadas = idsPropostasEnviadas(idUsuario);
+      const comMinhaProposta = new Set(
+        (listaPropostas ?? []).filter((p) => enviadas.has(p.idProposta) && p.projetoId != null).map((p) => p.projetoId as number)
+      );
+      const visiveisParaMim = (listaContratos ?? []).filter((c) => isAdmin || parte.has(c.projetoId) || comMinhaProposta.has(c.projetoId));
+      setPropostas(listaPropostas ?? []);
+
       setContratos(visiveisParaMim.sort((a, b) => b.idContrato - a.idContrato));
       setProjetos(listaProjetos ?? []);
       setMeusProjetos(meus);
@@ -140,11 +154,33 @@ function ContratosPageContent() {
     await carregar();
   }
 
+  // PUT /contrato/{id}/aceitar aceita ADMIN e USUARIO. Quem aceita é a outra parte (não o criador).
+  const podeAceitar = (c: Contrato) =>
+    c.statusContrato === "PENDENTE" && (isAdmin || (!!usuario?.roles?.includes("USUARIO") && !meusProjetos.has(c.projetoId)));
+
+  async function aceitar(contrato: Contrato) {
+    const ok = await confirmar(
+      `Aceitar o contrato "${contrato.tituloContrato}"? O valor da proposta vinculada será somado ao arrecadado do projeto.`,
+      { titulo: "Aceitar contrato", confirmarLabel: "Aceitar" }
+    );
+    if (!ok) return;
+    setAceitando(contrato.idContrato);
+    try {
+      const atualizado = await aceitarContrato(contrato.idContrato);
+      setContratos((l) => l.map((c) => (c.idContrato === contrato.idContrato ? { ...c, ...atualizado } : c)));
+      notificar("Contrato aceito.", "sucesso");
+    } catch (error) {
+      notificar(mensagemErro(error, "Não foi possível aceitar o contrato."));
+    } finally {
+      setAceitando(null);
+    }
+  }
+
   async function excluir(contrato: Contrato) {
     // termo.id_contrato não tem cascade: com termos vinculados o servidor recusa (erro 500).
     let termosDoContrato = 0;
     try {
-      termosDoContrato = ((await listarTermos()) ?? []).filter((t) => t.contratoId === contrato.idContrato).length;
+      termosDoContrato = ((await listarTermosDoContrato(contrato.idContrato)) ?? []).length;
     } catch (error) {
       notificar(mensagemErro(error, "Não foi possível verificar os termos deste contrato. Tente novamente."));
       return;
@@ -182,7 +218,7 @@ function ContratosPageContent() {
           <p className={`${cls.texto} mt-1.5 max-w-md`}>
             {isAdmin
               ? "Todos os contratos da plataforma."
-              : "Registro de autoria dos seus projetos (verificador antiplágio). Você vê apenas contratos de projetos em que é criador, sócio ou investidor."}
+              : "Contratos que formalizam propostas e registram a autoria dos projetos. Você vê os contratos dos projetos em que é parte e daqueles para os quais enviou proposta."}
           </p>
         </div>
 
@@ -212,6 +248,8 @@ function ContratosPageContent() {
             contrato={editando}
             projetos={projetosDisponiveis}
             projetoInicial={projetoIdParam && podeGerenciar(projetoIdParam) ? projetoIdParam : ""}
+            propostas={propostas}
+            propostaInicial={propostaIdParam ?? ""}
             onEnviar={salvar}
             onCancelar={() => {
               setMostrarForm(false);
@@ -253,7 +291,10 @@ function ContratosPageContent() {
             return (
               <article key={contrato.idContrato} className={`${cls.card} flex flex-col p-5`}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className={contrato.active ? cls.chipAtivo : cls.chipInativo}>{contrato.active ? "Ativo" : "Inativo"}</span>
+                  <span className="flex flex-wrap gap-1.5">
+                    {contrato.statusContrato && <ChipStatusNegociacao status={contrato.statusContrato} />}
+                    <span className={contrato.active ? cls.chipAtivo : cls.chipInativo}>{contrato.active ? "Ativo" : "Inativo"}</span>
+                  </span>
                   {gerenciavel && (
                     <div className="flex items-center gap-1">
                       <button
@@ -293,6 +334,18 @@ function ContratosPageContent() {
                   <Briefcase size={15} aria-hidden="true" />
                   {projetoMap.get(contrato.projetoId) || `Projeto #${contrato.projetoId}`}
                 </Link>
+
+                {podeAceitar(contrato) && (
+                  <button
+                    type="button"
+                    onClick={() => aceitar(contrato)}
+                    disabled={aceitando !== null}
+                    className={`${cls.btnPrimario} mt-4 self-start !text-[13px]`}
+                  >
+                    {aceitando === contrato.idContrato ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}
+                    Aceitar contrato
+                  </button>
+                )}
 
                 <div className="mt-auto pt-4">
                   <Link

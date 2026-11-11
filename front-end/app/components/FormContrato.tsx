@@ -6,15 +6,22 @@ import { isoParaInputDataHora } from "../lib/date";
 import { mensagemErro } from "../lib/api";
 import { Contrato, ContratoRequest } from "../types/Contrato";
 import { Projeto } from "../types/Projeto";
+import { Proposta } from "../types/Proposta";
+import { formatarMoeda } from "../lib/validacao";
 import { cls } from "./ui/estilos";
 import Alerta from "./ui/Alerta";
 
-/** Formulário de contrato (ContratoRequestDTO: datas LocalDateTime em ISO). */
+/**
+ * Formulário de contrato (ContratoRequestDTO: datas LocalDateTime em ISO). A proposta é
+ * obrigatória (@NotNull) e precisa ser do projeto escolhido; com ela o contrato nasce PENDENTE.
+ */
 export default function FormContrato({
   contrato,
   projetos,
   projetoFixo,
   projetoInicial,
+  propostas,
+  propostaInicial,
   onEnviar,
   onCancelar,
 }: {
@@ -23,6 +30,9 @@ export default function FormContrato({
   projetos: Projeto[];
   projetoFixo?: number;
   projetoInicial?: number | "";
+  /** Propostas disponíveis (filtradas pelo projeto escolhido). */
+  propostas: Proposta[];
+  propostaInicial?: number | "";
   onEnviar: (dados: ContratoRequest) => Promise<void>;
   onCancelar: () => void;
 }) {
@@ -31,6 +41,8 @@ export default function FormContrato({
   const [dataInicio, setDataInicio] = useState(isoParaInputDataHora(contrato?.dataInicioContrato));
   const [dataFim, setDataFim] = useState(isoParaInputDataHora(contrato?.dataFimContrato));
   const [projetoId, setProjetoId] = useState<number | "">(projetoFixo ?? contrato?.projetoId ?? projetoInicial ?? "");
+  const [propostaId, setPropostaId] = useState<number | "">(contrato?.propostaId ?? propostaInicial ?? "");
+  const propostasDoProjeto = propostas.filter((p) => projetoId !== "" && p.projetoId === Number(projetoId) && p.statusProposta !== "RECUSADA");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -51,6 +63,10 @@ export default function FormContrato({
       setErro("Selecione o projeto vinculado.");
       return;
     }
+    if (!propostaId) {
+      setErro("Selecione a proposta que este contrato formaliza.");
+      return;
+    }
     setErro("");
     setSalvando(true);
     try {
@@ -60,6 +76,7 @@ export default function FormContrato({
         dataInicioContrato: dataInicio.length === 16 ? `${dataInicio}:00` : dataInicio,
         dataFimContrato: dataFim.length === 16 ? `${dataFim}:00` : dataFim,
         projetoId: Number(projetoId),
+        propostaId: Number(propostaId),
       });
     } catch (error) {
       setErro(mensagemErro(error, "Não foi possível salvar o contrato."));
@@ -132,7 +149,10 @@ export default function FormContrato({
             <select
               id="contrato-projeto"
               value={projetoId}
-              onChange={(e) => setProjetoId(e.target.value ? Number(e.target.value) : "")}
+              onChange={(e) => {
+                setProjetoId(e.target.value ? Number(e.target.value) : "");
+                setPropostaId("");
+              }}
               className={`${cls.input} !bg-white`}
             >
               <option value="">{projetos.length === 0 ? "Nenhum projeto disponível" : "Selecione um projeto"}</option>
@@ -144,6 +164,31 @@ export default function FormContrato({
             </select>
           </div>
         )}
+        <div className="md:col-span-2">
+          <label htmlFor="contrato-proposta" className={cls.label}>
+            Proposta formalizada *
+          </label>
+          <select
+            id="contrato-proposta"
+            value={propostaId}
+            onChange={(e) => setPropostaId(e.target.value ? Number(e.target.value) : "")}
+            disabled={projetoId === ""}
+            className={`${cls.input} !bg-white`}
+          >
+            <option value="">
+              {projetoId === "" ? "Escolha o projeto primeiro" : propostasDoProjeto.length === 0 ? "Este projeto não tem propostas" : "Selecione a proposta"}
+            </option>
+            {propostasDoProjeto.map((p) => (
+              <option key={p.idProposta} value={p.idProposta}>
+                #{p.idProposta} · {formatarMoeda(p.valorProposta)} · {p.descricaoProposta.slice(0, 60)}
+                {p.descricaoProposta.length > 60 ? "…" : ""}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[12px] text-ink-400">
+            O contrato fica “aguardando aceite”; ao ser aceito, o valor da proposta é somado ao arrecadado do projeto.
+          </p>
+        </div>
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">

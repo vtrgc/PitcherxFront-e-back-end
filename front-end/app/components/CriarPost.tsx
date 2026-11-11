@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Send, Loader2, ImagePlus } from "lucide-react";
-import { criarPostagem, substituirImagensPostagem } from "../services/postagem.service";
+import { Send, Loader2, ImagePlus, Film } from "lucide-react";
+import { criarPostagem, substituirImagensPostagem, substituirVideosPostagem } from "../services/postagem.service";
+import SeletorVideos from "./SeletorVideos";
 import { useAuth } from "../context/AuthContext";
 import { mensagemErro } from "../lib/api";
 import { dataPostagemHoje } from "../lib/date";
@@ -22,8 +23,8 @@ const LIMITE_TITULO = LIMITES.tituloPostagem;
 const LIMITE_TEXTO = 2000;
 
 /**
- * Criação de postagem: POST /postagem (JSON) e, se houver imagens, PUT /postagem/{id}/imagens
- * (multipart) logo em seguida — o backend recebe a galeria em um endpoint separado.
+ * Criação de postagem: POST /postagem (JSON) e, se houver mídia, PUT /postagem/{id}/imagens e
+ * PUT /postagem/{id}/videos (multipart) logo em seguida — o backend recebe a mídia em endpoints separados.
  */
 export default function CriarPost({ atualizarFeed }: Props) {
   const { usuario } = useAuth();
@@ -33,6 +34,8 @@ export default function CriarPost({ atualizarFeed }: Props) {
   const [texto, setTexto] = useState("");
   const [imagens, setImagens] = useState<File[]>([]);
   const [mostrarImagens, setMostrarImagens] = useState(false);
+  const [videos, setVideos] = useState<File[]>([]);
+  const [mostrarVideos, setMostrarVideos] = useState(false);
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -63,11 +66,23 @@ export default function CriarPost({ atualizarFeed }: Props) {
         }
       }
 
+      let falhaVideos = "";
+      if (videos.length > 0 && criada?.idPostagem) {
+        try {
+          await substituirVideosPostagem(criada.idPostagem, videos);
+        } catch (error) {
+          falhaVideos = mensagemErro(error, "Não foi possível enviar os vídeos.");
+        }
+      }
+
       setTitulo("");
       setTexto("");
       setImagens([]);
       setMostrarImagens(false);
+      setVideos([]);
+      setMostrarVideos(false);
       if (falhaImagens) notificar(`Publicação criada, mas as imagens não foram salvas: ${falhaImagens} Você pode adicioná-las editando a publicação.`, "erro");
+      else if (falhaVideos) notificar(`Publicação criada, mas os vídeos não foram salvos: ${falhaVideos} Você pode adicioná-los editando a publicação.`, "erro");
       else notificar("Publicação criada.", "sucesso");
       atualizarFeed();
     } catch (error) {
@@ -129,6 +144,7 @@ export default function CriarPost({ atualizarFeed }: Props) {
         />
 
         {mostrarImagens && <SeletorImagens arquivos={imagens} onChange={setImagens} desabilitado={loading} />}
+        {mostrarVideos && <SeletorVideos arquivos={videos} onChange={setVideos} desabilitado={loading} />}
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
           <div className="flex items-center gap-3">
@@ -141,6 +157,16 @@ export default function CriarPost({ atualizarFeed }: Props) {
             >
               <ImagePlus size={16} aria-hidden="true" />
               Imagens{imagens.length > 0 ? ` (${imagens.length})` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMostrarVideos((v) => !v)}
+              aria-expanded={mostrarVideos}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+            >
+              <Film size={16} aria-hidden="true" />
+              Vídeos{videos.length > 0 ? ` (${videos.length})` : ""}
             </button>
             <span className="text-[12px] text-ink-400" aria-live="polite">
               {texto.length}/{LIMITE_TEXTO}

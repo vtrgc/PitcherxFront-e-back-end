@@ -6,6 +6,7 @@ import { FileText } from "lucide-react";
 import PageShell from "../components/PageShell";
 import SearchBar from "../components/SearchBar";
 import CriarPost from "../components/CriarPost";
+import Recomendacoes from "../components/projeto/Recomendacoes";
 import PostCard from "../components/PostCard";
 import EmptyState from "../components/EmptyState";
 import Alerta from "../components/ui/Alerta";
@@ -84,6 +85,7 @@ export default function FeedPage() {
         rotulo="Pesquisar publicações"
       />
       <CriarPost atualizarFeed={carregarPosts} />
+      <Recomendacoes className="border-b border-ink-100 pb-5" />
 
       {erroCarregamento && !loading && (
         <Alerta titulo="Erro ao carregar o feed" onTentarNovamente={carregarPosts}>

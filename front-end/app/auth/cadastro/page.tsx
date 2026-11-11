@@ -63,8 +63,8 @@ export default function Cadastro() {
 
     try {
       const novo = await login({ emailUsuario: email.trim().toLowerCase(), senhaUsuario: senha });
-      // O backend cria a conta inativa e envia um código por e-mail: primeiro a verificação,
-      // depois completar o perfil (LinkedIn, CPF/CNPJ, especialidade).
+      // O backend cria a conta inativa (o login só funciona após a aprovação da identidade);
+      // se ela já estiver ativa: verificação do código e depois completar o perfil.
       router.replace(novo.isActive ? "/auth/completar-cadastro" : "/auth/verificar-conta?novo=1");
     } catch {
       // A conta foi criada; só o login automático falhou.

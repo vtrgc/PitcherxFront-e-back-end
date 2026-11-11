@@ -32,6 +32,7 @@ import Avatar from "../components/ui/Avatar";
 import ImagemRemota from "../components/ImagemRemota";
 
 import StatCard from "../components/admin/StatCard";
+import PendenciasModeracao from "../components/admin/PendenciasModeracao";
 import SectionCard from "../components/admin/SectionCard";
 import BarChart from "../components/admin/BarChart";
 import InfoNote from "../components/admin/InfoNote";
@@ -206,6 +207,11 @@ export default function AdminDashboard() {
           </button>
         </div>
       )}
+
+      <div>
+        <h2 className="mb-3 px-1 text-[13px] font-bold uppercase tracking-wide text-ink-400">Pendências</h2>
+        <PendenciasModeracao />
+      </div>
 
       <div>
         <h2 className="mb-3 px-1 text-[13px] font-bold uppercase tracking-wide text-ink-400">Visão geral</h2>

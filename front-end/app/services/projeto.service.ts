@@ -100,3 +100,96 @@ export async function substituirImagensProjeto(id: number, arquivos: File[]) {
 export function removerImagensProjeto(id: number) {
   return api<void>(`/projeto/${id}/imagens`, { method: "DELETE" });
 }
+
+/** PUT /projeto/{id}/videos (multipart, campo "arquivos") — substitui os vídeos. */
+export async function substituirVideosProjeto(id: number, arquivos: File[]) {
+  const formData = new FormData();
+  arquivos.forEach((arquivo) => formData.append("arquivos", arquivo));
+  const projeto = await api<Projeto>(`/projeto/${id}/videos`, { method: "PUT", body: formData, timeoutMs: 300000 });
+  return projeto ? normalizarProjeto(projeto) : projeto;
+}
+
+/** DELETE /projeto/{id}/videos — remove todos os vídeos. */
+export function removerVideosProjeto(id: number) {
+  return api<void>(`/projeto/${id}/videos`, { method: "DELETE" });
+}
+
+/**
+ * POST /projeto/{id}/visualizar — registra uma visualização (conta para o nível do criador).
+ * Chamado ao abrir a página; falhas são ignoradas. A tabela projeto_interacao do backend tem
+ * restrição única (projeto, usuário, tipo): só a PRIMEIRA visualização de cada pessoa é aceita
+ * (as seguintes dão erro 500). Por isso o navegador lembra os projetos já contados.
+ */
+const visualizadosNestaSessao = new Set<string>();
+export function registrarVisualizacao(id: number, usuarioId?: number | null) {
+  const chave = `${usuarioId ?? "anon"}:${id}`;
+  const chaveStorage = `pitcherx:projetos-visualizados:${usuarioId ?? "anon"}`;
+  let jaContados: number[] = [];
+  try {
+    jaContados = JSON.parse(window.localStorage.getItem(chaveStorage) ?? "[]");
+  } catch {
+    jaContados = [];
+  }
+  if (visualizadosNestaSessao.has(chave) || (Array.isArray(jaContados) && jaContados.includes(id))) return Promise.resolve();
+  visualizadosNestaSessao.add(chave);
+  return api<void>(`/projeto/${id}/visualizar`, { method: "POST" })
+    .catch(() => undefined)
+    .finally(() => {
+      try {
+        window.localStorage.setItem(chaveStorage, JSON.stringify([...(Array.isArray(jaContados) ? jaContados : []), id].slice(-500)));
+      } catch {
+        /* armazenamento indisponível */
+      }
+    });
+}
+
+/**
+ * POST /projeto/{id}/seguir — ALTERNA seguir/deixar de seguir (o backend não expõe o estado).
+ * A interface guarda neste navegador o último estado conhecido para exibir o botão certo.
+ */
+export async function alternarSeguirProjeto(id: number, usuarioId: number): Promise<boolean> {
+  await api<void>(`/projeto/${id}/seguir`, { method: "POST" });
+  const seguindo = !segueProjeto(usuarioId, id);
+  gravarSeguidos(usuarioId, id, seguindo);
+  return seguindo;
+}
+
+function chaveSeguidos(usuarioId: number) {
+  return `pitcherx:projetos-seguidos:${usuarioId}`;
+}
+
+function lerSeguidos(usuarioId: number): number[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const v = JSON.parse(window.localStorage.getItem(chaveSeguidos(usuarioId)) ?? "[]");
+    return Array.isArray(v) ? v.filter((n) => typeof n === "number") : [];
+  } catch {
+    return [];
+  }
+}
+
+function gravarSeguidos(usuarioId: number, projetoId: number, seguindo: boolean) {
+  try {
+    const atual = new Set(lerSeguidos(usuarioId));
+    if (seguindo) atual.add(projetoId);
+    else atual.delete(projetoId);
+    window.localStorage.setItem(chaveSeguidos(usuarioId), JSON.stringify([...atual]));
+  } catch {
+    /* armazenamento indisponível */
+  }
+}
+
+export function segueProjeto(usuarioId: number | null | undefined, projetoId: number): boolean {
+  if (!usuarioId) return false;
+  return lerSeguidos(usuarioId).includes(projetoId);
+}
+
+/** GET /projeto/usuario/{idUsuario} — projetos em que o usuário tem qualquer vínculo. */
+export async function listarProjetosDoUsuario(idUsuario: number) {
+  return normalizarLista(await api<Projeto[]>(`/projeto/usuario/${idUsuario}`));
+}
+
+/** GET /projeto/visualizar/{idUsuario} — projetos que o usuário pode abrir (vínculo + termos). */
+export async function listarProjetosVisiveisAoUsuario(idUsuario: number) {
+  return normalizarLista(await api<Projeto[]>(`/projeto/visualizar/${idUsuario}`));
+}

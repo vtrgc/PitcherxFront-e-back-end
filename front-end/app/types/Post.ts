@@ -10,6 +10,9 @@ export interface Post {
   dataPostagem: string;
   urlImagemPostagem?: string | null;
   imagens?: string[] | null;
+  /** Vídeos (PUT/DELETE /postagem/{id}/videos). */
+  videos?: string[] | null;
+  urlVideoPostagem?: string | null;
   usuarioId: number;
   /** Preenchidos no front a partir de /curtida/status. */
   totalCurtidas?: number;

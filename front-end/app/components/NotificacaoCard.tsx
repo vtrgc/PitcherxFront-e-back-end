@@ -1,6 +1,23 @@
 "use client";
 
-import { Bell, Check, CheckCheck, Loader2, UserCheck, UserPlus, UserX, X } from "lucide-react";
+import Link from "next/link";
+import {
+  Award,
+  Bell,
+  Check,
+  CheckCheck,
+  ChevronRight,
+  FileCheck2,
+  FileX2,
+  Flag,
+  HandCoins,
+  Loader2,
+  Scale,
+  UserCheck,
+  UserPlus,
+  UserX,
+  X,
+} from "lucide-react";
 import { tempoRelativo } from "../lib/date";
 import { Notificacao, TIPO_NOTIFICACAO } from "../types/Conexao";
 import { cls } from "./ui/estilos";
@@ -9,7 +26,43 @@ const ICONES: Record<string, { icone: typeof Bell; cor: string }> = {
   [TIPO_NOTIFICACAO.CONEXAO_SOLICITADA]: { icone: UserPlus, cor: "bg-brand-50 text-brand-700" },
   [TIPO_NOTIFICACAO.CONEXAO_ACEITA]: { icone: UserCheck, cor: "bg-emerald-50 text-emerald-700" },
   [TIPO_NOTIFICACAO.CONEXAO_RECUSADA]: { icone: UserX, cor: "bg-ink-50 text-ink-500" },
+  [TIPO_NOTIFICACAO.CONTRAPROPOSTA_RECEBIDA]: { icone: HandCoins, cor: "bg-brand-50 text-brand-700" },
+  [TIPO_NOTIFICACAO.CONTRAPROPOSTA_ACEITA]: { icone: HandCoins, cor: "bg-emerald-50 text-emerald-700" },
+  [TIPO_NOTIFICACAO.CONTRAPROPOSTA_REJEITADA]: { icone: HandCoins, cor: "bg-ink-50 text-ink-500" },
+  [TIPO_NOTIFICACAO.DENUNCIA_NOVA]: { icone: Flag, cor: "bg-red-50 text-red-700" },
+  [TIPO_NOTIFICACAO.DENUNCIA_APELACAO]: { icone: Scale, cor: "bg-amber-50 text-amber-800" },
+  [TIPO_NOTIFICACAO.DENUNCIA_RESULTADO]: { icone: Flag, cor: "bg-brand-50 text-brand-700" },
+  [TIPO_NOTIFICACAO.COMPROVANTE_IDENTIDADE_NOVO]: { icone: FileCheck2, cor: "bg-amber-50 text-amber-800" },
+  [TIPO_NOTIFICACAO.IDENTIDADE_APROVADA]: { icone: FileCheck2, cor: "bg-emerald-50 text-emerald-700" },
+  [TIPO_NOTIFICACAO.IDENTIDADE_REPROVADA]: { icone: FileX2, cor: "bg-red-50 text-red-700" },
+  [TIPO_NOTIFICACAO.NIVEL_CONTA_ALTERADO]: { icone: Award, cor: "bg-brand-50 text-brand-700" },
+  [TIPO_NOTIFICACAO.NIVEL_CONTA_EVOLUICAO]: { icone: Award, cor: "bg-emerald-50 text-emerald-700" },
 };
+
+/** Para onde cada tipo de notificação leva (a tela que resolve o assunto). */
+export function destinoNotificacao(tipo: string): { href: string; rotulo: string } | null {
+  switch (tipo) {
+    case TIPO_NOTIFICACAO.CONTRAPROPOSTA_RECEBIDA:
+      return { href: "/propostas?aba=contras-recebidas", rotulo: "Responder contraproposta" };
+    case TIPO_NOTIFICACAO.CONTRAPROPOSTA_ACEITA:
+    case TIPO_NOTIFICACAO.CONTRAPROPOSTA_REJEITADA:
+      return { href: "/propostas?aba=contras-enviadas", rotulo: "Ver contrapropostas" };
+    case TIPO_NOTIFICACAO.DENUNCIA_RESULTADO:
+      return { href: "/denuncias", rotulo: "Ver minhas denúncias" };
+    case TIPO_NOTIFICACAO.DENUNCIA_NOVA:
+    case TIPO_NOTIFICACAO.DENUNCIA_APELACAO:
+      return { href: "/admin/denuncias", rotulo: "Moderar" };
+    case TIPO_NOTIFICACAO.COMPROVANTE_IDENTIDADE_NOVO:
+      return { href: "/admin/identidades", rotulo: "Analisar identidade" };
+    case TIPO_NOTIFICACAO.IDENTIDADE_APROVADA:
+    case TIPO_NOTIFICACAO.IDENTIDADE_REPROVADA:
+    case TIPO_NOTIFICACAO.NIVEL_CONTA_ALTERADO:
+    case TIPO_NOTIFICACAO.NIVEL_CONTA_EVOLUICAO:
+      return { href: "/configuracoes#verificacao", rotulo: "Ver minha conta" };
+    default:
+      return null;
+  }
+}
 
 export type RespostaSolicitacao = "aceita" | "recusada" | "processada";
 
@@ -30,6 +83,7 @@ export default function NotificacaoCard({ notificacao, resposta, ocupado, marcan
   const solicitacao =
     notificacao.tipo === TIPO_NOTIFICACAO.CONEXAO_SOLICITADA && typeof notificacao.referenciaId === "number" && !!onAceitar && !!onRecusar;
   const naoLida = !notificacao.lida;
+  const destino = destinoNotificacao(notificacao.tipo);
 
   return (
     <li className={`flex gap-3 border-b border-ink-100 px-4 py-4 last:border-b-0 sm:px-5 ${naoLida ? "bg-brand-50/50" : ""}`}>
@@ -50,8 +104,17 @@ export default function NotificacaoCard({ notificacao, resposta, ocupado, marcan
         </div>
         <p className="mt-0.5 break-words text-[13.5px] leading-relaxed text-ink-600">{notificacao.mensagem}</p>
 
-        {(solicitacao || naoLida) && (
+        {(solicitacao || naoLida || destino) && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            {destino && (
+              <Link
+                href={destino.href}
+                onClick={() => naoLida && onMarcarLida()}
+                className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1.5 text-[12.5px] font-semibold text-brand-700 hover:bg-brand-100"
+              >
+                {destino.rotulo} <ChevronRight size={13} aria-hidden="true" />
+              </Link>
+            )}
             {solicitacao &&
               (resposta ? (
                 <span className={resposta === "aceita" ? cls.chipAtivo : cls.chipInativo}>

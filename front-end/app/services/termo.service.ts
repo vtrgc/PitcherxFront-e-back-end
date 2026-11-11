@@ -28,3 +28,8 @@ export function excluirTermo(id: number) {
     method: "DELETE",
   });
 }
+
+/** GET /termo/contrato/{contratoId}. */
+export function listarTermosDoContrato(contratoId: number) {
+  return api<Termo[]>(`/termo/contrato/${contratoId}`);
+}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Users, Briefcase, Building2 } from "lucide-react";
 
 import PageShell from "../components/PageShell";
+import Recomendacoes from "../components/projeto/Recomendacoes";
 import SearchBar from "../components/SearchBar";
 import EmptyState from "../components/EmptyState";
 import { CardGridSkeleton } from "../components/Skeleton";
@@ -269,6 +270,8 @@ export default function Explorar() {
           )}
         </div>
       </div>
+
+      {aba === "projetos" && <Recomendacoes />}
 
       {erros.length > 0 && (
         <Alerta titulo="Alguns dados não puderam ser carregados" onTentarNovamente={carregar}>

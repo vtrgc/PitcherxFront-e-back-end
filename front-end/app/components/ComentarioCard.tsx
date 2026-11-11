@@ -13,7 +13,6 @@ import { mensagemErro } from "../lib/api";
 import { atualizarComentario, excluirComentarioComRespostas } from "../services/comentario.service";
 import { atualizarSubComentario, criarSubComentario, excluirSubComentario, listarSubComentarios } from "../services/subComentario.service";
 import { autorDaResposta, esquecerRespostaPropria, idsRespostasProprias, registrarRespostaPropria } from "../lib/autoriaRespostas";
-import ConteudoOcultado from "./denuncia/ConteudoOcultado";
 import ModalDenuncia from "./denuncia/ModalDenuncia";
 import Avatar from "./ui/Avatar";
 import { cls } from "./ui/estilos";
@@ -79,7 +78,8 @@ export default function ComentarioCard({ comentario, aoAlterar }: Props) {
   // PUT/POST de comentários e respostas: somente USUARIO/EMPRESA no backend.
   const podeEditar = ehAutor && !isAdmin;
   const podeResponder = !!usuarioLogado && !isAdmin;
-  const podeDenunciar = denuncia.podeDenunciar && !ehAutor && !isAdmin;
+  // Depois de denunciar, o botão some (o backend aceita uma denúncia por alvo).
+  const podeDenunciar = denuncia.podeDenunciar && !denuncia.denunciado && !ehAutor && !isAdmin;
 
   async function carregarRespostas() {
     setCarregandoRespostas(true);
@@ -162,14 +162,6 @@ export default function ComentarioCard({ comentario, aoAlterar }: Props) {
     } finally {
       setSalvando(false);
     }
-  }
-
-  if (podeDenunciar && denuncia.denunciado) {
-    return (
-      <article className="py-4 border-b border-ink-100 last:border-b-0">
-        <ConteudoOcultado nome="este comentário" onDesfazer={denuncia.desfazer} />
-      </article>
-    );
   }
 
   return (
@@ -363,7 +355,8 @@ function RespostaItem({
   // PUT /sub-comentario: USUARIO/EMPRESA; DELETE: também ADMIN.
   const podeEditar = ehAutor && !isAdmin;
   const podeExcluir = ehAutor || isAdmin;
-  const podeDenunciar = denuncia.podeDenunciar && !ehAutor && !isAdmin;
+  // Depois de denunciar, o botão some (o backend aceita uma denúncia por alvo).
+  const podeDenunciar = denuncia.podeDenunciar && !denuncia.denunciado && !ehAutor && !isAdmin;
 
   async function salvar() {
     if (!usuarioLogado || !texto.trim()) return;
@@ -383,13 +376,8 @@ function RespostaItem({
     }
   }
 
-  if (podeDenunciar && denuncia.denunciado) {
-    return <ConteudoOcultado nome="esta resposta" onDesfazer={denuncia.desfazer} className="!py-2" />;
-  }
-
   return (
     <div className="border-l-2 border-brand-100 pl-3">
-      <ModalDenuncia tipo="SUBCOMENTARIO" conteudoId={resposta.idSubComentario} aberto={denuncia.modalAberto} onFechar={denuncia.fechar} />
       <div className="flex items-start justify-between gap-2">
         {autorId ? <AutorInfo usuarioId={autorId} tamanho={28} /> : <AutorDesconhecido />}
         <div className="flex shrink-0 items-center">

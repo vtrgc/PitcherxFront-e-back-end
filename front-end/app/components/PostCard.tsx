@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Heart, MessageCircle, Share2, MoreHorizontal, ChevronUp, Pencil, Trash2, Loader2, Save, X, ImageOff, Flag } from "lucide-react";
+import { Heart, MessageCircle, Share2, MoreHorizontal, ChevronUp, Pencil, Trash2, Loader2, Save, X, ImageOff, Flag, Film } from "lucide-react";
 
 import { useUsuario } from "../hook/useUsuario";
 import { useAuth } from "../context/AuthContext";
@@ -11,14 +11,23 @@ import { useComentarios } from "../hook/useComentarios";
 import { useDenuncia } from "../hook/useDenuncia";
 import type { ConexoesUsuario } from "../hook/useConexao";
 import BotaoConexao from "./conexao/BotaoConexao";
-import { atualizarPostagem, excluirPostagemComComentarios, removerImagensPostagem, substituirImagensPostagem } from "../services/postagem.service";
+import {
+  atualizarPostagem,
+  excluirPostagemComComentarios,
+  removerImagensPostagem,
+  removerVideosPostagem,
+  substituirImagensPostagem,
+  substituirVideosPostagem,
+} from "../services/postagem.service";
+import GaleriaVideos from "./GaleriaVideos";
+import SeletorVideos from "./SeletorVideos";
+import { videosDaGaleria } from "../lib/video";
 import { mensagemErro } from "../lib/api";
 import { dataPostagemHoje } from "../lib/date";
 import { imagensDaGaleria } from "../lib/galeria";
 import { LIMITES } from "../lib/limites";
 import { Post } from "../types/Post";
 import ComentarioCard from "./ComentarioCard";
-import ConteudoOcultado from "./denuncia/ConteudoOcultado";
 import ModalDenuncia from "./denuncia/ModalDenuncia";
 import CriarComentario from "./CriarComentario";
 import GaleriaImagens from "./GaleriaImagens";
@@ -108,8 +117,11 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
   // PUT/DELETE /postagem/{id}/imagens: autor ou ADMIN (validado no servidor).
   const podeGerenciarImagens = ehAutor || isAdmin;
   // Denunciar: qualquer conta comum que não seja a autora (o admin modera direto).
-  const podeDenunciar = denuncia.podeDenunciar && !ehAutor && !isAdmin;
+  // Depois de denunciar, o botão some (o backend aceita uma denúncia por alvo).
+  const podeDenunciar = denuncia.podeDenunciar && !denuncia.denunciado && !ehAutor && !isAdmin;
   const imagens = imagensDaGaleria(post.imagens, post.urlImagemPostagem);
+  const videos = videosDaGaleria(post.videos, post.urlVideoPostagem);
+  const [novosVideos, setNovosVideos] = useState<File[]>([]);
 
   function alternarComentarios() {
     const abrindo = !mostrarComentarios;
@@ -156,7 +168,17 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
           return;
         }
       }
+      if (novosVideos.length > 0) {
+        try {
+          await substituirVideosPostagem(post.idPostagem, novosVideos);
+        } catch (error) {
+          setErroEdicao(`Texto salvo, mas os vídeos não foram enviados: ${mensagemErro(error, "tente novamente.")}`);
+          onUpdate?.();
+          return;
+        }
+      }
       setNovasImagens([]);
+      setNovosVideos([]);
       setEditando(false);
       notificar("Publicação atualizada.", "sucesso");
       onUpdate?.();
@@ -187,6 +209,23 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
     }
   }
 
+  async function removerVideos() {
+    setMenuAberto(false);
+    const ok = await confirmar(`Remover ${videos.length === 1 ? "o vídeo" : `os ${videos.length} vídeos`} desta publicação?`, {
+      titulo: "Remover vídeos",
+      confirmarLabel: "Remover",
+      perigo: true,
+    });
+    if (!ok) return;
+    try {
+      await removerVideosPostagem(post.idPostagem);
+      notificar("Vídeos removidos.", "sucesso");
+      onUpdate?.();
+    } catch (error) {
+      notificar(mensagemErro(error, "Não foi possível remover os vídeos."));
+    }
+  }
+
   async function excluir() {
     setMenuAberto(false);
     const ok = await confirmar("Excluir esta publicação? Os comentários dela também serão removidos.", {
@@ -211,14 +250,6 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
   // Antes de abrir: contagem que veio com a lista (GET /comentario). Depois: a lista carregada.
   const qtdComentarios = comentarios.carregado ? comentarios.comentarios.length : post.totalComentarios;
   const totalComentarios = comentarios.comentarios.length;
-
-  if (podeDenunciar && denuncia.denunciado) {
-    return (
-      <article className="py-6 border-b border-ink-100 first:pt-1 last:border-b-0">
-        <ConteudoOcultado nome="esta publicação" onDesfazer={denuncia.desfazer} />
-      </article>
-    );
-  }
 
   return (
     <article className="relative py-6 border-b border-ink-100 transition-colors first:pt-1 last:border-b-0" aria-busy={excluindo}>
@@ -253,7 +284,7 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
             onCancelar={() => conexoes.cancelarSolicitacao({ id: post.usuarioId, nome: autor.nomeUsuario })}
           />
         )}
-        {(podeEditar || podeExcluir || podeDenunciar || (podeGerenciarImagens && imagens.length > 0)) && (
+        {(podeEditar || podeExcluir || podeDenunciar || (podeGerenciarImagens && (imagens.length > 0 || videos.length > 0))) && (
           <div className="relative" ref={menuRef}>
             <button
               type="button"
@@ -292,6 +323,16 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
                     className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13.5px] font-medium text-ink-700 hover:bg-ink-50"
                   >
                     <ImageOff size={15} aria-hidden="true" /> Remover imagens
+                  </button>
+                )}
+                {podeGerenciarImagens && videos.length > 0 && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={removerVideos}
+                    className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13.5px] font-medium text-ink-700 hover:bg-ink-50"
+                  >
+                    <Film size={15} aria-hidden="true" /> Remover vídeos
                   </button>
                 )}
                 {podeExcluir && (
@@ -361,6 +402,12 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
             </p>
             <SeletorImagens arquivos={novasImagens} onChange={setNovasImagens} desabilitado={salvando} rotulo="Escolher imagens" />
           </div>
+          <div>
+            <p className="mb-1.5 text-[12.5px] font-semibold text-ink-700">
+              {videos.length > 0 ? `Substituir os ${videos.length} vídeo(s) atuais (opcional)` : "Adicionar vídeos (opcional)"}
+            </p>
+            <SeletorVideos arquivos={novosVideos} onChange={setNovosVideos} desabilitado={salvando} />
+          </div>
           <p className="text-[12px] text-ink-400">Ao salvar, a data da publicação passa a ser a de hoje (regra da API).</p>
           <div className="flex flex-wrap gap-2">
             <button type="submit" disabled={salvando} className={cls.btnPrimario}>
@@ -372,6 +419,7 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
               onClick={() => {
                 setEditando(false);
                 setNovasImagens([]);
+                setNovosVideos([]);
                 setErroEdicao("");
               }}
               disabled={salvando}
@@ -392,6 +440,7 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
               <GaleriaImagens imagens={imagens} titulo={post.tituloPostagem} />
             </div>
           )}
+          {videos.length > 0 && <GaleriaVideos videos={videos} titulo={post.tituloPostagem} className="mt-3" />}
         </div>
       )}
 

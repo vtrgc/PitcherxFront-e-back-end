@@ -52,6 +52,12 @@ export function salvarProfissional(
   valor: CamposProfissionalValor
 ): Promise<PerfilUsuario> {
   const dados = paraRequestProfissional(valor, idUsuario);
+  // O PUT /perfil-usuario copia TODOS os campos do DTO (inclusive nulos): reenviamos a capa e o
+  // vídeo atuais para que salvar as informações profissionais não os apague.
+  if (perfilAtual) {
+    dados.urlBanner = perfilAtual.urlBanner ?? null;
+    dados.urlVideoPerfil = perfilAtual.urlVideoPerfil ?? null;
+  }
   return perfilAtual ? atualizarPerfilUsuario(perfilAtual.idPerfilUsuario, dados) : criarPerfilUsuario(dados);
 }
 

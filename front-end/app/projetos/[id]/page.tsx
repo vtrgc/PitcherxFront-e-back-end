@@ -25,6 +25,9 @@ import {
   Tag,
   UserRound,
   Activity,
+  HandCoins,
+  BellPlus,
+  BellOff,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,7 +41,6 @@ import { imagensDaGaleria } from "../../lib/galeria";
 import PainelFinanceiro from "../../components/projeto/PainelFinanceiro";
 import PainelVotos from "../../components/projeto/PainelVotos";
 import ModalDenuncia from "../../components/denuncia/ModalDenuncia";
-import ConteudoOcultado from "../../components/denuncia/ConteudoOcultado";
 import Avatar from "../../components/ui/Avatar";
 import { useDenuncia } from "../../hook/useDenuncia";
 import { ROTULO_SITUACAO, formatarDias, linhaDoTempo } from "../../lib/projeto";
@@ -62,7 +64,13 @@ import {
   excluirProjeto,
   removerImagensProjeto,
   substituirImagensProjeto,
+  registrarVisualizacao,
+  alternarSeguirProjeto,
+  segueProjeto,
 } from "../../services/projeto.service";
+import VideosProjeto from "../../components/projeto/VideosProjeto";
+import PropostasDoProjeto from "../../components/projeto/PropostasDoProjeto";
+import { ChipStatusNegociacao } from "../../components/projeto/ChipsNegociacao";
 import { listarTiposProjeto } from "../../services/tipoProjeto.service";
 import { listarContratos } from "../../services/contrato.service";
 import { listarPorProjeto, ehParteDoContrato, temAcessoAoProjeto, vinculoDoUsuario } from "../../services/projetoUsuario.service";
@@ -122,6 +130,8 @@ export default function ProjetoDetalhePage() {
   const [gerenciandoImagens, setGerenciandoImagens] = useState(false);
   const [novasImagens, setNovasImagens] = useState<File[]>([]);
   const [salvandoImagens, setSalvandoImagens] = useState(false);
+  const [seguindo, setSeguindo] = useState(false);
+  const [alternandoSeguir, setAlternandoSeguir] = useState(false);
 
   const carregar = useCallback(async () => {
     if (!Number.isInteger(id) || id <= 0) {
@@ -226,7 +236,30 @@ export default function ProjetoDetalhePage() {
   // O backend aceita PUT/DELETE de imagens de qualquer vinculado; visualizadores não alteram a galeria.
   const podeGerenciarImagens = isAdmin || ehParte || (podeGerenciar && semCriadorRegistrado);
   const imagens = imagensDaGaleria(projeto?.imagens, projeto?.urlImagemProjeto);
-  const podeDenunciar = denuncia.podeDenunciar && !isAdmin && !ehParte && !erroMembros;
+  // POST /projeto/{id}/visualizar: conta a visita de quem tem acesso (o criador não conta).
+  useEffect(() => {
+    if (projeto && acessoLiberado && !isAdmin && !ehCriador && !erroMembros) registrarVisualizacao(projeto.idProjeto, usuario?.idUsuario);
+  }, [projeto, acessoLiberado, isAdmin, ehCriador, erroMembros, usuario?.idUsuario]);
+
+  useEffect(() => {
+    setSeguindo(segueProjeto(usuario?.idUsuario, id));
+  }, [usuario?.idUsuario, id]);
+
+  async function alternarSeguir() {
+    if (!usuario || alternandoSeguir) return;
+    setAlternandoSeguir(true);
+    try {
+      const agora = await alternarSeguirProjeto(id, usuario.idUsuario);
+      setSeguindo(agora);
+      notificar(agora ? "Você está seguindo este projeto." : "Você deixou de seguir este projeto.", "sucesso");
+    } catch (e) {
+      notificar(mensagemErro(e, "Não foi possível atualizar o acompanhamento do projeto."));
+    } finally {
+      setAlternandoSeguir(false);
+    }
+  }
+
+  const podeDenunciar = denuncia.podeDenunciar && !denuncia.denunciado && !isAdmin && !ehParte && !erroMembros;
 
   async function salvarImagens() {
     if (!projeto || novasImagens.length === 0) return;
@@ -397,17 +430,6 @@ export default function ProjetoDetalhePage() {
     );
   }
 
-  if (podeDenunciar && denuncia.denunciado) {
-    return (
-      <PageShell>
-        <Link href={voltar.href} className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-brand-700 hover:underline">
-          <ArrowLeft size={15} aria-hidden="true" /> {voltar.rotulo}
-        </Link>
-        <ConteudoOcultado nome="este projeto" onDesfazer={denuncia.desfazer} className="mt-4" />
-      </PageShell>
-    );
-  }
-
   return (
     <PageShell>
       <Link href={voltar.href} className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-brand-700 hover:underline">
@@ -438,7 +460,27 @@ export default function ProjetoDetalhePage() {
               <Share2 size={15} aria-hidden="true" />
               <span className="hidden sm:inline">Compartilhar</span>
             </button>
-            {podeDenunciar && !denuncia.denunciado && (
+            {!isAdmin && !ehCriador && !erroMembros && (
+              <button
+                type="button"
+                onClick={alternarSeguir}
+                disabled={alternandoSeguir}
+                aria-pressed={seguindo}
+                className={BOTAO_HERO}
+                title="Seguir: o backend alterna entre seguir e deixar de seguir"
+              >
+                {seguindo ? <BellOff size={15} aria-hidden="true" /> : <BellPlus size={15} aria-hidden="true" />}
+                {seguindo ? "Seguindo" : "Seguir"}
+              </button>
+            )}
+            {!isAdmin && !ehCriador && !erroMembros && (
+              <Link href={`/propostas?projetoId=${projeto.idProjeto}`} className={BOTAO_HERO}>
+                <HandCoins size={15} aria-hidden="true" />
+                <span className="hidden sm:inline">Enviar proposta</span>
+                <span className="sr-only sm:hidden">Enviar proposta</span>
+              </Link>
+            )}
+            {podeDenunciar && (
               <button type="button" onClick={denuncia.abrir} className={BOTAO_HERO} aria-label="Denunciar projeto" title="Denunciar projeto">
                 <Flag size={15} aria-hidden="true" />
               </button>
@@ -670,6 +712,18 @@ export default function ProjetoDetalhePage() {
         </section>
       )}
 
+      <VideosProjeto projeto={projeto} podeGerenciar={podeGerenciarImagens} onAtualizado={setProjeto} />
+
+      {(ehCriador || isAdmin) && (
+        <PropostasDoProjeto
+          projetoId={projeto.idProjeto}
+          ehCriador={ehCriador && !isAdmin}
+          onMudanca={() => {
+            carregar();
+          }}
+        />
+      )}
+
       <section className="mt-10 border-t border-ink-100 pt-8" aria-labelledby="titulo-contratos">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="titulo-contratos" className={cls.eyebrow}>
@@ -710,8 +764,9 @@ export default function ProjetoDetalhePage() {
                       {formatarDataHora(contrato.dataInicioContrato)} — {formatarDataHora(contrato.dataFimContrato)}
                     </p>
                   </div>
-                  <span className={`${contrato.active ? cls.chipAtivo : cls.chipInativo} shrink-0`}>
-                    {contrato.active ? "Ativo" : "Inativo"}
+                  <span className="flex shrink-0 flex-wrap gap-1.5">
+                    {contrato.statusContrato && <ChipStatusNegociacao status={contrato.statusContrato} />}
+                    <span className={contrato.active ? cls.chipAtivo : cls.chipInativo}>{contrato.active ? "Ativo" : "Inativo"}</span>
                   </span>
                 </Link>
               </li>

@@ -27,10 +27,9 @@ import SeletorRiscos from "./projeto/SeletorRiscos";
  * Formulário de projeto (criação e edição). Replica as validações do ProjetoRequestDTO:
  * nome/descrição obrigatórios, início hoje ou futuro, término futuro e tipo obrigatório.
  *
- * Dados financeiros: `metaFinanceira` (obrigatória) e `valorArrecadado` são campos do DTO;
- * os riscos vêm do catálogo (`riscoProjetoIds`, obrigatório mesmo vazio). Participação,
- * investimento mínimo e uso dos recursos são opcionais e, por não terem coluna no backend,
- * ficam no fim da descrição (ver lib/fichaProjeto) sem aparecer no texto.
+ * Dados financeiros (campos do DTO): `metaFinanceira`, `investimentoMinimo` e
+ * `participacaoOferecida` (inteiro) são obrigatórios; `valorArrecadado` e `usoRecursos` são
+ * opcionais. Os riscos vêm do catálogo (`riscoProjetoIds`, obrigatório mesmo vazio).
  *
  * Imagens: na criação, o usuário pode escolher arquivos (enviados depois por
  * PUT /projeto/{id}/imagens) ou informar uma URL. Na edição, a galeria é gerenciada na
@@ -92,6 +91,11 @@ export default function FormProjeto({
     const financeiro = validarCamposFicha(ficha);
     // metaFinanceira é @NotNull no ProjetoRequestDTO.
     if (!financeiro.erros.meta && !financeiro.ficha?.meta) financeiro.erros.meta = "Informe a meta financeira do projeto.";
+    // investimentoMinimo e participacaoOferecida também são @NotNull.
+    if (!financeiro.erros.investimentoMinimo && !financeiro.ficha?.investimentoMinimo)
+      financeiro.erros.investimentoMinimo = "Informe o investimento mínimo por aporte.";
+    if (!financeiro.erros.participacao && !financeiro.ficha?.participacao)
+      financeiro.erros.participacao = "Informe a participação oferecida aos investidores.";
     setErrosFicha(financeiro.erros);
     if (Object.keys(financeiro.erros).length > 0) {
       setErro("Revise os dados financeiros destacados.");
@@ -220,8 +224,8 @@ export default function FormProjeto({
             <CircleDollarSign size={15} aria-hidden="true" /> Dados financeiros
           </legend>
           <p className="mb-3 text-[12.5px] text-ink-500">
-            Aparecem na página do projeto (meta, progresso da captação e participação oferecida). A meta é obrigatória; deixe em
-            branco o restante que não quiser divulgar.
+            Aparecem na página do projeto (meta, progresso da captação e participação oferecida). Meta, investimento mínimo e
+            participação são obrigatórios.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <CampoFicha
@@ -242,7 +246,7 @@ export default function FormProjeto({
             />
             <CampoFicha
               id="participacao"
-              rotulo="Participação oferecida (%)"
+              rotulo="Participação oferecida (%) *"
               placeholder="Ex.: 15"
               valor={ficha.participacao}
               erro={errosFicha.participacao}
@@ -250,7 +254,7 @@ export default function FormProjeto({
             />
             <CampoFicha
               id="minimo"
-              rotulo="Investimento mínimo (R$)"
+              rotulo="Investimento mínimo (R$) *"
               placeholder="Ex.: 5.000,00"
               valor={ficha.investimentoMinimo}
               erro={errosFicha.investimentoMinimo}

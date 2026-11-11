@@ -22,6 +22,7 @@ import Alerta from "../../components/ui/Alerta";
 import { cls } from "../../components/ui/estilos";
 import { useFeedback } from "../../components/ui/FeedbackProvider";
 import CampoFotoPerfil from "../../components/perfil/CampoFotoPerfil";
+import VideoPerfil from "../../components/perfil/VideoPerfil";
 import CamposProfissional from "../../components/perfil/CamposProfissional";
 import CamposEndereco from "../../components/perfil/CamposEndereco";
 import { useAuth, AuthUser } from "../../context/AuthContext";
@@ -381,6 +382,17 @@ function FormularioPerfil({
             }
           >
             <CamposProfissional valor={prof} onChange={setProf} erros={errosProf} desabilitado={salvando} />
+          </Secao>
+        )}
+
+        {/* ------------------------------------------------- vídeo do perfil */}
+        {perfil && (
+          <Secao
+            id="video"
+            titulo="Vídeo de apresentação"
+            descricao="Opcional. Aparece no seu perfil. É enviado na hora, sem precisar clicar em “Salvar alterações”."
+          >
+            <VideoPerfil perfil={perfil} onAtualizado={setPerfil} />
           </Secao>
         )}
 

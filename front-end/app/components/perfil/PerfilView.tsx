@@ -27,9 +27,16 @@ import {
   UserPlus,
   Building2,
   Vote,
+  Award,
+  Flag,
+  Film,
   type LucideIcon,
 } from "lucide-react";
 import BotaoConexao from "../conexao/BotaoConexao";
+import ModalDenuncia from "../denuncia/ModalDenuncia";
+import GaleriaVideos from "../GaleriaVideos";
+import { useDenuncia } from "../../hook/useDenuncia";
+import { rotuloNivel } from "../../services/nivelConta.service";
 import { useContadoresConexao, useRelacaoConexao } from "../../hook/useConexao";
 import { ACCEPT_FOTO, validarArquivoFoto } from "../../lib/imagemPerfil";
 import { atualizarBanner, removerBanner } from "../../services/perfilUsuario.service";
@@ -81,6 +88,8 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
 
   const { usuario, loading, indisponivel, recarregar: recarregarUsuario } = useUsuario(id);
   const dados = useDadosPerfil(id);
+  const denunciaPerfil = useDenuncia("PERFIL", id);
+  const podeDenunciarPerfil = !proprio && denunciaPerfil.podeDenunciar && !denunciaPerfil.denunciado;
 
   // Conexões: contadores públicos e, no perfil de outra pessoa, a relação comigo.
   const contadores = useContadoresConexao(id);
@@ -307,11 +316,17 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
       <button type="button" onClick={compartilhar} className={cls.btnContorno}>
         <Share2 size={16} aria-hidden="true" /> Compartilhar
       </button>
+      {podeDenunciarPerfil && (
+        <button type="button" onClick={denunciaPerfil.abrir} className={cls.btnIconePerigo} aria-label="Denunciar perfil" title="Denunciar perfil">
+          <Flag size={16} />
+        </button>
+      )}
     </>
   );
 
   return (
     <div className="mx-auto w-full max-w-[1080px] space-y-6">
+      <ModalDenuncia tipo="PERFIL" conteudoId={id} aberto={denunciaPerfil.modalAberto} onFechar={denunciaPerfil.fechar} />
       {mostrarVoltar && (
         <button
           type="button"
@@ -595,6 +610,13 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
                     <Vazio proprio={proprio && !logadoAdmin} texto="Não informado" />
                   )}
                 </ItemSobre>
+                {usuario.nivelConta && (
+                  <ItemSobre icone={Award} rotulo="Nível da conta">
+                    <span className={cls.chip} title={usuario.nivelConta.descricao ?? undefined}>
+                      {rotuloNivel(usuario.nivelConta.nome)}
+                    </span>
+                  </ItemSobre>
+                )}
                 <ItemSobre icone={Mail} rotulo="E-mail">
                   <span className="break-all">{usuario.emailUsuario}</span>
                 </ItemSobre>
@@ -612,6 +634,15 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
               </p>
             )}
           </section>
+
+          {perfil?.urlVideoPerfil && (
+            <section className={`${cls.card} p-5`} aria-labelledby="video-perfil-titulo">
+              <h2 id="video-perfil-titulo" className="flex items-center gap-2 font-display text-[16px] font-bold text-ink-900">
+                <Film size={16} className="text-brand-600" aria-hidden="true" /> Vídeo de apresentação
+              </h2>
+              <GaleriaVideos videos={[perfil.urlVideoPerfil]} titulo={`Apresentação de ${usuario.nomeUsuario}`} className="mt-3" />
+            </section>
+          )}
 
           {proprio && !logadoAdmin && (
             <CartaoVerificacao

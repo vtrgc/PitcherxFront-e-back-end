@@ -4,6 +4,8 @@ export interface PerfilUsuarioRequest {
   identificador: string;
   idEspecialidade: number;
   idUsuario: number;
+  urlBanner?: string | null;
+  urlVideoPerfil?: string | null;
 }
 
 export interface Especialidade {
@@ -24,6 +26,8 @@ export interface PerfilUsuario {
   identificador: string;
   /** Imagem de capa (POST/DELETE /perfil-usuario/{id}/banner). */
   urlBanner?: string | null;
+  /** Vídeo de apresentação (POST/DELETE /perfil-usuario/{id}/video). */
+  urlVideoPerfil?: string | null;
   especialidade: Especialidade;
   usuario: UsuarioSimples;
 }

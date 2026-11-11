@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Key, Trash2, Settings, ChevronRight, Loader2, UserRound, Bell, Users, LogOut, Mail, Phone, Clock } from "lucide-react";
+import { Key, Trash2, Settings, ChevronRight, Loader2, UserRound, Bell, Users, LogOut, Mail, Phone, Clock, Flag } from "lucide-react";
 import PageShell from "../components/PageShell";
 import Alerta from "../components/ui/Alerta";
 import { cls } from "../components/ui/estilos";
@@ -14,6 +14,7 @@ import { useNotificacoes } from "../context/NotificacoesContext";
 import { SENHA_MINIMA } from "../lib/validacao";
 import { useDadosPerfil } from "../hook/useDadosPerfil";
 import CartaoVerificacao from "../components/perfil/CartaoVerificacao";
+import CartaoIdentidade from "../components/perfil/CartaoIdentidade";
 
 export default function Configuracoes() {
   const { usuario, logout, isAdmin } = useAuth();
@@ -166,6 +167,9 @@ export default function Configuracoes() {
               carregando={dadosPerfil.carregando}
               erroPerfil={!!dadosPerfil.erro}
             />
+            <div className="mt-4 border-t border-ink-100 pt-4">
+              <CartaoIdentidade idUsuario={usuario.idUsuario} />
+            </div>
           </div>
         )}
 
@@ -181,6 +185,18 @@ export default function Configuracoes() {
           </span>
           <ChevronRight size={17} className="text-ink-400" aria-hidden="true" />
         </Link>
+
+        {!isAdmin && (
+          <Link href="/denuncias" className="flex items-center justify-between py-4 text-[14.5px] font-medium text-ink-900 hover:text-brand-700">
+            <span className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                <Flag size={18} aria-hidden="true" />
+              </span>
+              Minhas denúncias
+            </span>
+            <ChevronRight size={17} className="text-ink-400" aria-hidden="true" />
+          </Link>
+        )}
 
         {!isAdmin && (
           <Link href="/conexoes" className="flex items-center justify-between py-4 text-[14.5px] font-medium text-ink-900 hover:text-brand-700">

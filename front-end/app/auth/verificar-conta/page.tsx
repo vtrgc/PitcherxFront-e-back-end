@@ -16,8 +16,8 @@ import AuthAlert from "../../components/auth/AuthAlert";
  * Verificação da conta (POST /usuario/verificar-conta).
  *
  * No cadastro o backend cria a conta inativa e envia por e-mail um código de 6 dígitos.
- * O login continua funcionando para contas não verificadas (ele devolve `isActive: false`),
- * e a rota de verificação exige o token — por isso esta tela só é usada com a sessão aberta.
+ * A conta é ativada pela administração (análise de identidade); a confirmação do código exige
+ * o token, então é feita depois do primeiro login (também acessível em Configurações).
  *
  * Query string:
  *  - `novo=1`: veio do cadastro; depois de verificar segue para "Completar cadastro".
@@ -59,8 +59,8 @@ function VerificarContaConteudo() {
       router.replace("/auth/login?redirect=%2Fauth%2Fverificar-conta");
       return;
     }
-    // Conta já ativa: nada a verificar.
-    if (usuario?.isActive) router.replace(proximaTela(isAdmin));
+    // Conta já ativa e sem pedido explícito (vindo de Configurações): nada a verificar.
+    if (usuario?.isActive && !destino) router.replace(proximaTela(isAdmin));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, isAuthenticated, usuario?.isActive, isAdmin, enviando, verificada]);
 
@@ -81,7 +81,9 @@ function VerificarContaConteudo() {
       router.replace(proximaTela(admin));
     } catch (error) {
       const mensagem = error instanceof ApiError ? error.payload?.message ?? "" : "";
-      if (/j[aá] foi verificada/i.test(mensagem)) {
+      if (/j[aá] foi verificada/i.test(mensagem) && usuario?.isActive) {
+        setErro("Seu e-mail já foi confirmado. Não é preciso digitar o código novamente.");
+      } else if (/j[aá] foi verificada/i.test(mensagem)) {
         // A conta já tinha sido verificada e continua inativa: foi desativada pelo administrador.
         setContaDesativada(true);
         setErro("Esta conta já foi verificada, mas está desativada. Fale com um administrador da plataforma.");

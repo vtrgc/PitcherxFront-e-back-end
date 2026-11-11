@@ -1,23 +1,22 @@
 /**
- * Ficha financeira do projeto (meta, valor captado, risco, participação oferecida...).
+ * Ficha financeira do projeto (meta, valor captado, participação oferecida...).
  *
- * Campos REAIS do backend (`ProjetoRequestDTO`/`ProjetoResponseDTO`):
- *  - `metaFinanceira` (obrigatório) e `valorArrecadado`.
- * O `projeto.service` copia esses campos para `ficha.meta` e `ficha.captado`. Os riscos são
- * uma lista do catálogo (`riscoProjetoIds` / `riscos`) e não fazem parte da ficha.
+ * Todos os campos são REAIS no backend (`ProjetoRequestDTO`/`ProjetoResponseDTO`):
+ *  - `metaFinanceira` (obrigatório), `valorArrecadado`,
+ *  - `investimentoMinimo` (obrigatório), `participacaoOferecida` (inteiro, obrigatório),
+ *  - `usoRecursos`.
+ * O `projeto.service` copia esses campos para `ficha`. Os riscos são uma lista do catálogo
+ * (`riscoProjetoIds` / `riscos`) e não fazem parte da ficha.
  *
- * Complemento sem coluna própria no backend (participação, investimento mínimo e uso dos
- * recursos) continua guardado no `descricaoProjeto` (coluna TEXT), num bloco no fim do texto.
- * Projetos antigos também podem ter meta/captado nesse bloco: eles só são usados quando os
- * campos reais vierem vazios.
+ * Projetos criados por versões antigas do front guardavam parte desses dados num bloco no
+ * fim do `descricaoProjeto`:
  *
  *     Descrição livre do projeto...
  *
- *     <!--pitcherx:ficha {"v":1,"meta":100000,"captado":65000,"participacao":15}-->
+ *     <!--pitcherx:ficha {"v":1,"participacao":15}-->
  *
- * Toda tela que mostra a descrição usa `textoDaDescricao`, então o bloco nunca aparece. Os
- * valores são SEMPRE os informados pelo criador: nada é estimado ou inventado; campos não
- * informados ficam ausentes e a interface diz "não informado".
+ * O bloco continua sendo lido (só vale quando o campo real vier vazio) e nunca é exibido —
+ * toda tela usa `textoDaDescricao`. Ao salvar, o bloco deixa de ser gravado.
  */
 
 import { parseValorMonetario } from "./validacao";
@@ -35,8 +34,6 @@ export interface FichaProjeto {
   usoRecursos?: string;
 }
 
-const PREFIXO = "<!--pitcherx:ficha ";
-const SUFIXO = "-->";
 const REGEX_BLOCO = /\s*<!--pitcherx:ficha (\{[\s\S]*?\})-->\s*$/;
 export const USO_RECURSOS_MAX = 600;
 /** DECIMAL(19,2) é o padrão de valores monetários do backend: usamos o mesmo teto. */
@@ -89,45 +86,51 @@ export function textoDaDescricao(descricao: string | null | undefined): string {
   return lerDescricaoProjeto(descricao).texto;
 }
 
-/**
- * Monta o `descricaoProjeto` para a API: texto + bloco com o complemento (participação,
- * investimento mínimo e uso dos recursos). Meta e captado vão nos campos próprios
- * do DTO (`camposFinanceirosApi`) e não são repetidos no bloco.
- */
-export function montarDescricaoProjeto(texto: string, ficha: FichaProjeto | null | undefined): string {
-  const limpa = normalizarFicha(
-    ficha ? { participacao: ficha.participacao, investimentoMinimo: ficha.investimentoMinimo, usoRecursos: ficha.usoRecursos } : null
-  );
-  const corpo = texto.trim();
-  if (!limpa) return corpo;
-  // "-->" dentro do JSON fecharia o comentário antes da hora.
-  const json = JSON.stringify({ v: 1, ...limpa }).replace(/-->/g, "--\\u003e");
-  return `${corpo}\n\n${PREFIXO}${json}${SUFIXO}`;
+/** Monta o `descricaoProjeto` para a API (o texto; os números vão nos campos próprios). */
+export function montarDescricaoProjeto(texto: string, ficha?: FichaProjeto | null): string {
+  void ficha; // mantido na assinatura: os números agora vão nos campos próprios do DTO
+  return texto.trim();
 }
 
 /** Campos financeiros próprios do ProjetoRequestDTO. */
 export function camposFinanceirosApi(ficha: FichaProjeto | null | undefined): {
   metaFinanceira: number;
   valorArrecadado: number | null;
+  investimentoMinimo: number;
+  participacaoOferecida: number;
+  usoRecursos: string | null;
 } {
   return {
     metaFinanceira: ficha?.meta ?? 0,
     valorArrecadado: ficha?.captado ?? null,
+    investimentoMinimo: ficha?.investimentoMinimo ?? 0,
+    participacaoOferecida: Math.round(ficha?.participacao ?? 0),
+    usoRecursos: ficha?.usoRecursos?.trim() || null,
   };
 }
 
 /**
- * Junta os campos reais da resposta (`metaFinanceira`, `valorArrecadado`)
- * com o complemento lido da descrição. Os campos reais têm prioridade; meta/captado do bloco
- * só valem para projetos criados antes desses campos existirem.
+ * Junta os campos reais da resposta com o bloco legado lido da descrição. Os campos reais
+ * têm prioridade; o bloco só vale para projetos criados antes desses campos existirem.
  */
 export function combinarFicha(
-  real: { metaFinanceira?: number | null; valorArrecadado?: number | null },
+  real: {
+    metaFinanceira?: number | null;
+    valorArrecadado?: number | null;
+    investimentoMinimo?: number | null;
+    participacaoOferecida?: number | null;
+    usoRecursos?: string | null;
+  },
   legado: FichaProjeto | null
 ): FichaProjeto | null {
-  const meta = typeof real.metaFinanceira === "number" && real.metaFinanceira > 0 ? real.metaFinanceira : legado?.meta;
-  const captado = typeof real.valorArrecadado === "number" ? real.valorArrecadado : legado?.captado;
-  return normalizarFicha({ ...legado, meta, captado });
+  const positivo = (v: number | null | undefined) => (typeof v === "number" && v > 0 ? v : undefined);
+  return normalizarFicha({
+    meta: positivo(real.metaFinanceira) ?? legado?.meta,
+    captado: typeof real.valorArrecadado === "number" ? real.valorArrecadado : legado?.captado,
+    investimentoMinimo: positivo(real.investimentoMinimo) ?? legado?.investimentoMinimo,
+    participacao: positivo(real.participacaoOferecida) ?? legado?.participacao,
+    usoRecursos: real.usoRecursos?.trim() || legado?.usoRecursos,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -218,8 +221,10 @@ export function validarCamposFicha(c: CamposFicha): { ficha: FichaProjeto | null
   const p = c.participacao.trim().replace("%", "").replace(",", ".");
   if (p) {
     const n = Number(p);
-    if (!Number.isFinite(n) || n <= 0 || n > 100) erros.participacao = "Informe um percentual entre 0 e 100.";
-    else participacao = Math.round(n * 100) / 100;
+    // participacaoOferecida é Integer no backend.
+    if (!Number.isFinite(n) || n <= 0 || n > 100) erros.participacao = "Informe um percentual entre 1 e 100.";
+    else if (!Number.isInteger(n)) erros.participacao = "Use um percentual inteiro (ex.: 15).";
+    else participacao = n;
   }
   if (c.usoRecursos.length > USO_RECURSOS_MAX) erros.usoRecursos = `Use no máximo ${USO_RECURSOS_MAX} caracteres.`;
 
