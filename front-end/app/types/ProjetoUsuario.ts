@@ -1,9 +1,3 @@
-export interface ProjetoUsuarioRequest {
-  projetoId: number;
-  usuarioId: number;
-  tipoVinculoId: number;
-}
-
 /** ProjetoUsuarioResponseDTO. `dataVinculo` é LocalDateTime em ISO. */
 export interface ProjetoUsuario {
   idProjetoUsuario: number;
@@ -13,6 +7,9 @@ export interface ProjetoUsuario {
   tipoVinculoId: number;
   nomeTipoVinculo: string;
   dataVinculo: string | null;
+  /** true depois de POST /termo-vinculo/projeto/{id}/aceitar. */
+  aceitouTermos?: boolean | null;
+  dataAceite?: string | null;
 }
 
 /**

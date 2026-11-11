@@ -53,13 +53,22 @@ import { formatarData, formatarDataHora } from "../../lib/date";
 import { Projeto, ProjetoRequest } from "../../types/Projeto";
 import { TipoProjeto } from "../../types/TipoProjeto";
 import { Contrato } from "../../types/Contrato";
-import { PerfilUsuario } from "../../types/PerfilUsuario";
-import { ProjetoUsuario, TIPOS_VINCULO, TIPO_VINCULO_ID, rotuloVinculo } from "../../types/ProjetoUsuario";
-import { buscarProjeto, atualizarProjeto, excluirProjeto, removerImagensProjeto, substituirImagensProjeto } from "../../services/projeto.service";
+import { ProjetoUsuario, TIPO_VINCULO_ID, rotuloVinculo } from "../../types/ProjetoUsuario";
+import {
+  buscarProjeto,
+  atualizarProjeto,
+  atualizarMetaFinanceira,
+  atualizarValorArrecadado,
+  excluirProjeto,
+  removerImagensProjeto,
+  substituirImagensProjeto,
+} from "../../services/projeto.service";
 import { listarTiposProjeto } from "../../services/tipoProjeto.service";
 import { listarContratos } from "../../services/contrato.service";
-import { listarPerfisUsuario } from "../../services/perfilUsuario.service";
-import { listarPorProjeto, vincularUsuario, removerVinculo, ehParteDoContrato } from "../../services/projetoUsuario.service";
+import { listarPorProjeto, ehParteDoContrato, temAcessoAoProjeto, vinculoDoUsuario } from "../../services/projetoUsuario.service";
+import PortaoTermosVinculo from "../../components/projeto/PortaoTermosVinculo";
+import TermosVinculoProjeto from "../../components/projeto/TermosVinculoProjeto";
+import { MinhaParticipacao, SolicitacoesDoProjeto } from "../../components/projeto/SolicitacoesVinculo";
 
 /** Botão "Votar" (curtida do projeto) com a contagem real de votos. */
 function BotaoVotarProjeto({ curtida, desabilitado }: { curtida: ReturnType<typeof useCurtida>; desabilitado: boolean }) {
@@ -92,7 +101,6 @@ export default function ProjetoDetalhePage() {
   const [tipos, setTipos] = useState<TipoProjeto[]>([]);
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [membros, setMembros] = useState<ProjetoUsuario[]>([]);
-  const [perfis, setPerfis] = useState<PerfilUsuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
@@ -101,12 +109,6 @@ export default function ProjetoDetalhePage() {
   // Falhas nas listas auxiliares: sem elas não dá para saber quem é o dono nem se há contratos.
   const [erroMembros, setErroMembros] = useState(false);
   const [erroContratos, setErroContratos] = useState(false);
-
-  const [mostrarFormMembro, setMostrarFormMembro] = useState(false);
-  const [novoMembroUsuarioId, setNovoMembroUsuarioId] = useState("");
-  const [novoMembroTipoVinculoId, setNovoMembroTipoVinculoId] = useState<number | "">("");
-  const [salvandoMembro, setSalvandoMembro] = useState(false);
-  const [erroMembro, setErroMembro] = useState("");
 
   // Empresas cadastradas: identificam "empresas relacionadas" e o voto das empresas.
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -157,6 +159,15 @@ export default function ProjetoDetalhePage() {
     }
   }, [id]);
 
+  const recarregarEquipe = useCallback(async () => {
+    try {
+      setMembros((await listarPorProjeto(id)) ?? []);
+      setErroMembros(false);
+    } catch {
+      setErroMembros(true);
+    }
+  }, [id]);
+
   const carregarEmpresas = useCallback(async () => {
     setCarregandoEmpresas(true);
     setErroEmpresas("");
@@ -197,22 +208,25 @@ export default function ProjetoDetalhePage() {
 
   const tipoAtual = useMemo(() => tipos.find((t) => t.idTipoProjeto === projeto?.tipoProjetoId), [tipos, projeto]);
 
-  // O backend não guarda o dono do projeto: usamos o vínculo CRIADOR (registrado ao criar).
+  // Dono do projeto = vínculo CRIADOR (o backend o registra em POST /projeto/{idUsuario}).
   const criadores = membros.filter((m) => m.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR);
   const ehCriador = !!usuario && criadores.some((m) => m.usuarioId === usuario.idUsuario);
-  // Se a equipe não carregou, não sabemos se há criador: nada é liberado por engano.
+  // Projetos antigos podem não ter criador. Se a equipe não carregou, nada é liberado por engano.
   const semCriadorRegistrado = !erroMembros && criadores.length === 0;
-  // PUT /projeto e POST /projeto-usuario não são permitidos a ADMIN no backend.
+  // PUT /projeto não é permitido a ADMIN no backend.
   const podeGerenciar = !isAdmin && (ehCriador || semCriadorRegistrado);
   const podeExcluir = isAdmin || ehCriador || semCriadorRegistrado;
   const podeCriarContrato = isAdmin || podeGerenciar;
-  // PUT/DELETE /projeto/{id}/imagens: qualquer usuário vinculado ao projeto ou ADMIN.
-  const podeGerenciarImagens = isAdmin || (!!usuario && !erroMembros && membros.some((m) => m.usuarioId === usuario.idUsuario));
-  const imagens = imagensDaGaleria(projeto?.imagens, projeto?.urlImagemProjeto);
+  // Regra de acesso do backend (validarAcessoProjeto): só quem tem vínculo vê os detalhes.
+  const meuVinculo = vinculoDoUsuario(membros, usuario?.idUsuario);
+  const acessoLiberado = isAdmin || temAcessoAoProjeto(membros, usuario?.idUsuario);
   // Contratos = registro de autoria (antiplágio): só as partes do projeto e o admin os veem.
-  const podeVerContratos = isAdmin || (!erroMembros && ehParteDoContrato(membros, usuario?.idUsuario));
-  const naEquipe = !!usuario && membros.some((m) => m.usuarioId === usuario.idUsuario);
-  const podeDenunciar = denuncia.podeDenunciar && !isAdmin && !naEquipe && !erroMembros;
+  const ehParte = !erroMembros && ehParteDoContrato(membros, usuario?.idUsuario);
+  const podeVerContratos = isAdmin || ehParte;
+  // O backend aceita PUT/DELETE de imagens de qualquer vinculado; visualizadores não alteram a galeria.
+  const podeGerenciarImagens = isAdmin || ehParte || (podeGerenciar && semCriadorRegistrado);
+  const imagens = imagensDaGaleria(projeto?.imagens, projeto?.urlImagemProjeto);
+  const podeDenunciar = denuncia.podeDenunciar && !isAdmin && !ehParte && !erroMembros;
 
   async function salvarImagens() {
     if (!projeto || novasImagens.length === 0) return;
@@ -254,6 +268,22 @@ export default function ProjetoDetalhePage() {
     notificar("Projeto atualizado.", "sucesso");
   }
 
+  async function atualizarValores({ meta, captado }: { meta?: number; captado?: number }) {
+    if (!projeto) return;
+    const metaSalva = meta !== undefined ? await atualizarMetaFinanceira(projeto.idProjeto, meta) : undefined;
+    const captadoSalvo = captado !== undefined ? await atualizarValorArrecadado(projeto.idProjeto, captado) : undefined;
+    const ficha = { ...(projeto.ficha ?? {}) };
+    if (typeof metaSalva === "number") ficha.meta = metaSalva;
+    if (typeof captadoSalvo === "number") ficha.captado = captadoSalvo;
+    setProjeto({
+      ...projeto,
+      metaFinanceira: typeof metaSalva === "number" ? metaSalva : projeto.metaFinanceira,
+      valorArrecadado: typeof captadoSalvo === "number" ? captadoSalvo : projeto.valorArrecadado,
+      ficha,
+    });
+    notificar("Valores atualizados.", "sucesso");
+  }
+
   async function excluir() {
     if (!projeto) return;
     // contrato.id_projeto não tem cascade: com contratos vinculados o servidor recusa (erro 500).
@@ -278,75 +308,10 @@ export default function ProjetoDetalhePage() {
       notificar("Projeto excluído.", "sucesso");
       router.push(isAdmin ? "/admin/projetos" : "/projetos");
     } catch (error) {
-      notificar(mensagemErro(error, "Não foi possível excluir este projeto. Verifique se ele não tem contratos vinculados."));
-      setExcluindo(false);
-    }
-  }
-
-  async function abrirFormMembro() {
-    setMostrarFormMembro((v) => !v);
-    setErroMembro("");
-    if (perfis.length === 0) {
-      try {
-        setPerfis((await listarPerfisUsuario()) ?? []);
-      } catch {
-        /* sem a lista, o usuário ainda pode informar o ID */
-      }
-    }
-  }
-
-  async function adicionarMembro() {
-    if (!projeto || salvandoMembro) return;
-    const usuarioId = Number(novoMembroUsuarioId);
-    if (!Number.isInteger(usuarioId) || usuarioId <= 0 || !novoMembroTipoVinculoId) {
-      setErroMembro("Selecione a pessoa (ou informe o ID do usuário) e o tipo de vínculo.");
-      return;
-    }
-    // A checagem de duplicidade do backend compara os parâmetros na ordem errada;
-    // conferimos aqui para evitar o erro 500 da restrição única do banco.
-    if (membros.some((m) => m.usuarioId === usuarioId && m.tipoVinculoId === Number(novoMembroTipoVinculoId))) {
-      setErroMembro("Esta pessoa já possui esse vínculo com o projeto.");
-      return;
-    }
-
-    setErroMembro("");
-    setSalvandoMembro(true);
-    try {
-      const membro = await vincularUsuario({
-        projetoId: projeto.idProjeto,
-        usuarioId,
-        tipoVinculoId: Number(novoMembroTipoVinculoId),
-      });
-      setMembros((atual) => [...atual, membro]);
-      setNovoMembroUsuarioId("");
-      setNovoMembroTipoVinculoId("");
-      setMostrarFormMembro(false);
-      notificar("Membro adicionado.", "sucesso");
-    } catch (error) {
-      setErroMembro(
-        error instanceof ApiError && error.status === 404
-          ? "Usuário não encontrado. Confira o ID informado."
-          : mensagemErro(error, "Não foi possível adicionar este membro.")
+      notificar(
+        mensagemErro(error, "Não foi possível excluir este projeto. Verifique se ele não tem contratos ou solicitações de participação registradas.")
       );
-    } finally {
-      setSalvandoMembro(false);
-    }
-  }
-
-  async function removerMembro(membro: ProjetoUsuario) {
-    const ultimoCriador = membro.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR && criadores.length === 1;
-    const ok = await confirmar(
-      ultimoCriador
-        ? `Remover ${membro.nomeUsuario}? Ele é o único criador registrado — o projeto ficará sem dono identificado.`
-        : `Remover ${membro.nomeUsuario} da equipe?`,
-      { titulo: "Remover membro", perigo: true, confirmarLabel: "Remover" }
-    );
-    if (!ok) return;
-    try {
-      await removerVinculo(membro.idProjetoUsuario);
-      setMembros((atual) => atual.filter((m) => m.idProjetoUsuario !== membro.idProjetoUsuario));
-    } catch (error) {
-      notificar(mensagemErro(error, "Não foi possível remover este membro."));
+      setExcluindo(false);
     }
   }
 
@@ -383,7 +348,8 @@ export default function ProjetoDetalhePage() {
     );
   }
 
-  const idsNaEquipe = new Set(membros.map((m) => m.usuarioId));
+  // Equipe = criador, sócios e investidores; visualizadores apenas acompanham o projeto.
+  const idsNaEquipe = new Set(membros.filter((m) => m.tipoVinculoId !== TIPO_VINCULO_ID.VISUALIZADOR).map((m) => m.usuarioId));
   const tempo = linhaDoTempo(projeto);
   const empresasPorId = new Map(empresas.map((e) => [e.idUsuario, e]));
   // Autor(es): vínculo CRIADOR. Empresas relacionadas: membros da equipe que são empresas.
@@ -392,6 +358,44 @@ export default function ProjetoDetalhePage() {
     .map((uid) => ({ empresa: empresasPorId.get(uid), vinculos: membros.filter((m) => m.usuarioId === uid).map((m) => rotuloVinculo(m.nomeTipoVinculo)) }))
     .filter((x): x is { empresa: Empresa; vinculos: string[] } => !!x.empresa);
   const contagemVinculo = (tipo: number) => new Set(membros.filter((m) => m.tipoVinculoId === tipo).map((m) => m.usuarioId)).size;
+
+  if (!acessoLiberado) {
+    return (
+      <PageShell>
+        <Link href={voltar.href} className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-brand-700 hover:underline">
+          <ArrowLeft size={15} aria-hidden="true" /> {voltar.rotulo}
+        </Link>
+        <div className="relative -mx-4 mt-4 overflow-hidden rounded-[1.25rem] sm:-mx-8 lg:-mx-10">
+          <div className="relative h-48 w-full bg-brand-gradient sm:h-56">
+            <ImagemRemota url={projeto.urlImagemProjeto} alt="" />
+            <div className="absolute inset-0 bg-gradient-to-t from-void via-void/20 to-transparent" />
+          </div>
+          <div className="absolute inset-x-5 bottom-5 sm:inset-x-10 sm:bottom-6">
+            <div className="flex flex-wrap gap-2">
+              <span className={`${cls.chip} !bg-accent-500 !text-white !border-transparent`}>{tipoAtual?.nomeTipoProjeto || "Projeto"}</span>
+              <span className={tempo.situacao === "em_andamento" ? cls.chipAtivo : cls.chipInativo}>{ROTULO_SITUACAO[tempo.situacao]}</span>
+            </div>
+            <h1 className="font-display mt-3 text-[1.5rem] sm:text-[1.9rem] font-extrabold leading-tight tracking-tight text-white drop-shadow-lg break-words">
+              {projeto.nomeProjeto}
+            </h1>
+          </div>
+        </div>
+        {erroMembros ? (
+          <Alerta className="mt-8" titulo="Não foi possível verificar seu acesso" onTentarNovamente={carregar}>
+            A equipe do projeto não carregou, então não dá para saber se você já aceitou os termos de vínculo.
+          </Alerta>
+        ) : (
+          <PortaoTermosVinculo
+            projetoId={projeto.idProjeto}
+            onAceito={async () => {
+              await recarregarEquipe();
+              notificar("Termos aceitos. Agora você acompanha este projeto.", "sucesso");
+            }}
+          />
+        )}
+      </PageShell>
+    );
+  }
 
   if (podeDenunciar && denuncia.denunciado) {
     return (
@@ -535,7 +539,8 @@ export default function ProjetoDetalhePage() {
                     <>
                       {idsNaEquipe.size} pessoa{idsNaEquipe.size === 1 ? "" : "s"}
                       <span className="block text-[12.5px] text-ink-500">
-                        {contagemVinculo(TIPO_VINCULO_ID.SOCIO)} sócio(s) · {contagemVinculo(TIPO_VINCULO_ID.INVESTIDOR)} investidor(es)
+                        {contagemVinculo(TIPO_VINCULO_ID.SOCIO)} sócio(s) · {contagemVinculo(TIPO_VINCULO_ID.INVESTIDOR)} investidor(es) ·{" "}
+                        {contagemVinculo(TIPO_VINCULO_ID.VISUALIZADOR)} acompanhando
                       </span>
                     </>
                   )}
@@ -581,7 +586,15 @@ export default function ProjetoDetalhePage() {
             </section>
           </aside>
 
-            <PainelFinanceiro ficha={projeto.ficha} podeEditar={podeGerenciar} onEditar={() => setEditando(true)} />
+            {!isAdmin && !ehCriador && meuVinculo && <MinhaParticipacao projetoId={projeto.idProjeto} meuVinculo={meuVinculo} />}
+
+            <PainelFinanceiro
+              ficha={projeto.ficha}
+              riscos={projeto.riscos}
+              podeEditar={podeGerenciar}
+              onEditar={() => setEditando(true)}
+              onAtualizarValores={podeGerenciar ? atualizarValores : undefined}
+            />
 
             <PainelVotos
               projetoId={projeto.idProjeto}
@@ -708,109 +721,17 @@ export default function ProjetoDetalhePage() {
       </section>
 
       <section className="mt-10 border-t border-ink-100 pt-8" aria-labelledby="titulo-equipe">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="titulo-equipe" className={cls.eyebrow}>
-            <Users size={14} aria-hidden="true" />
-            Equipe do projeto
-          </h2>
-
-          {podeGerenciar && (
-            <button
-              type="button"
-              onClick={abrirFormMembro}
-              aria-expanded={mostrarFormMembro}
-              className={`${cls.btnSecundario} !text-[13px]`}
-            >
-              {mostrarFormMembro ? <X size={15} aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}
-              {mostrarFormMembro ? "Cancelar" : "Adicionar membro"}
-            </button>
-          )}
-        </div>
-
-        {mostrarFormMembro && podeGerenciar && (
-          <form
-            noValidate
-            className={`${cls.composer} mt-4 max-w-xl`}
-            onSubmit={(e) => {
-              e.preventDefault();
-              adicionarMembro();
-            }}
-          >
-            {erroMembro && <Alerta className="mb-4">{erroMembro}</Alerta>}
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="membro-usuario" className={cls.label}>
-                  Pessoa
-                </label>
-                {perfis.length > 0 ? (
-                  <select
-                    id="membro-usuario"
-                    value={novoMembroUsuarioId}
-                    onChange={(e) => setNovoMembroUsuarioId(e.target.value)}
-                    className={`${cls.input} !bg-white`}
-                  >
-                    <option value="">Selecione</option>
-                    {perfis.map((p) => (
-                      <option key={p.idPerfilUsuario} value={p.usuario.idUsuario}>
-                        {p.usuario.nomeUsuario}
-                        {idsNaEquipe.has(p.usuario.idUsuario) ? " (já na equipe)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id="membro-usuario"
-                    type="number"
-                    min={1}
-                    inputMode="numeric"
-                    value={novoMembroUsuarioId}
-                    onChange={(e) => setNovoMembroUsuarioId(e.target.value)}
-                    placeholder="ID do usuário"
-                    className={cls.input}
-                  />
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="membro-vinculo" className={cls.label}>
-                  Tipo de vínculo
-                </label>
-                <select
-                  id="membro-vinculo"
-                  value={novoMembroTipoVinculoId}
-                  onChange={(e) => setNovoMembroTipoVinculoId(e.target.value ? Number(e.target.value) : "")}
-                  className={`${cls.input} !bg-white`}
-                >
-                  <option value="">Selecione</option>
-                  {TIPOS_VINCULO.map((tipo) => (
-                    <option key={tipo.id} value={tipo.id}>
-                      {tipo.rotulo}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <p className="text-[0.8125rem] text-ink-500 mt-3">
-              {perfis.length > 0
-                ? "A lista mostra pessoas que completaram o perfil profissional."
-                : "Informe o ID do usuário (aparece no endereço do perfil dele, ex.: /perfil/4)."}{" "}
-              <Link href="/termos?aba=vinculo" className="font-semibold text-brand-700 hover:underline">
-                Ver termos de vínculo
-              </Link>
-            </p>
-
-            <button type="submit" disabled={salvandoMembro} className={`${cls.btnPrimario} mt-5 !text-[13px]`}>
-              {salvandoMembro ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-              Adicionar à equipe
-            </button>
-          </form>
-        )}
+        <h2 id="titulo-equipe" className={cls.eyebrow}>
+          <Users size={14} aria-hidden="true" />
+          Equipe do projeto
+        </h2>
+        <p className="mt-2 text-[13px] text-ink-500">
+          Visitantes entram aceitando os termos de vínculo; sócios e investidores entram por solicitações aprovadas pelo criador.
+        </p>
 
         {erroMembros ? (
           <Alerta className="mt-4" onTentarNovamente={carregar}>
-            Não foi possível carregar a equipe deste projeto. Edição e gestão da equipe ficam indisponíveis até recarregar.
+            Não foi possível carregar a equipe deste projeto. Edição e gestão ficam indisponíveis até recarregar.
           </Alerta>
         ) : membros.length === 0 ? (
           <p className="text-[0.8125rem] text-ink-500 mt-5">Nenhum membro vinculado a este projeto ainda.</p>
@@ -822,26 +743,27 @@ export default function ProjetoDetalhePage() {
                   <Link href={`/perfil/${membro.usuarioId}`} className="font-display text-[14.5px] font-semibold text-ink-900 hover:underline">
                     {membro.nomeUsuario}
                   </Link>
-                  <p className="text-[0.8125rem] text-ink-500 mt-0.5">Vinculado desde {formatarData(membro.dataVinculo)}</p>
+                  <p className="text-[0.8125rem] text-ink-500 mt-0.5">
+                    Vinculado desde {formatarData(membro.dataVinculo)}
+                    {membro.aceitouTermos && membro.dataAceite && ` · termos aceitos em ${formatarData(membro.dataAceite)}`}
+                  </p>
                 </div>
-                <div className="flex items-center gap-2.5">
-                  <span className={cls.chip}>{rotuloVinculo(membro.nomeTipoVinculo)}</span>
-                  {podeGerenciar && (
-                    <button
-                      type="button"
-                      onClick={() => removerMembro(membro)}
-                      aria-label={`Remover ${membro.nomeUsuario} da equipe`}
-                      className={cls.btnIconePerigo}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  )}
-                </div>
+                <span className={membro.tipoVinculoId === TIPO_VINCULO_ID.VISUALIZADOR ? cls.chipInativo : cls.chip}>
+                  {rotuloVinculo(membro.nomeTipoVinculo)}
+                </span>
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {!erroMembros && (ehCriador || isAdmin || ehParte) && (
+        <TermosVinculoProjeto projetoId={projeto.idProjeto} podeEditar={ehCriador && !isAdmin} podeExcluir={ehCriador || isAdmin} />
+      )}
+
+      {ehCriador && usuario && !isAdmin && (
+        <SolicitacoesDoProjeto projetoId={projeto.idProjeto} idCriador={usuario.idUsuario} onMudancaEquipe={recarregarEquipe} />
+      )}
     </PageShell>
   );
 }

@@ -11,6 +11,7 @@ import {
   User,
   Users,
   ShieldCheck,
+  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 import { SECOES_ADMIN } from "./AdminNav";
@@ -30,6 +31,7 @@ export const NAV_USUARIO: ItemNavegacao[] = [
   { href: "/feed", label: "Início", icon: House },
   { href: "/explorar", label: "Explorar", icon: Compass },
   { href: "/projetos", label: "Projetos", icon: Briefcase },
+  { href: "/solicitacoes", label: "Solicitações", icon: UserPlus },
   { href: "/conexoes", label: "Conexões", icon: Users },
   { href: "/propostas", label: "Propostas", icon: HandCoins },
   { href: "/contratos", label: "Contratos", icon: FileSignature },

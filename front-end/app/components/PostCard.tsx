@@ -11,7 +11,7 @@ import { useComentarios } from "../hook/useComentarios";
 import { useDenuncia } from "../hook/useDenuncia";
 import type { ConexoesUsuario } from "../hook/useConexao";
 import BotaoConexao from "./conexao/BotaoConexao";
-import { atualizarPostagem, excluirPostagem, removerImagensPostagem, substituirImagensPostagem } from "../services/postagem.service";
+import { atualizarPostagem, excluirPostagemComComentarios, removerImagensPostagem, substituirImagensPostagem } from "../services/postagem.service";
 import { mensagemErro } from "../lib/api";
 import { dataPostagemHoje } from "../lib/date";
 import { imagensDaGaleria } from "../lib/galeria";
@@ -196,7 +196,7 @@ export default function PostCard({ post, onUpdate, onExcluido, comentariosAberto
     if (!ok) return;
     setExcluindo(true);
     try {
-      await excluirPostagem(post.idPostagem);
+      await excluirPostagemComComentarios(post.idPostagem);
       notificar("Publicação excluída.", "sucesso");
       (onExcluido ?? onUpdate)?.();
     } catch (error) {

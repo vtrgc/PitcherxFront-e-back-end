@@ -9,7 +9,7 @@ import { agruparPorMes, formatarNumero } from "../dashboardUtils";
 import { mensagemErro } from "../../lib/api";
 import { formatarData } from "../../lib/date";
 import { useFeedback } from "../../components/ui/FeedbackProvider";
-import { excluirComentario } from "../../services/comentario.service";
+import { excluirComentarioComRespostas } from "../../services/comentario.service";
 
 import StatCard from "../../components/admin/StatCard";
 import SectionCard from "../../components/admin/SectionCard";
@@ -66,7 +66,7 @@ export default function AdminInteracoesPage() {
     if (!(await confirmar("Excluir este comentário e as respostas dele?", { titulo: "Excluir comentário", perigo: true }))) return;
     setExcluindoId(idComentario);
     try {
-      await excluirComentario(idComentario);
+      await excluirComentarioComRespostas(idComentario);
       recarregar();
     } catch (error) {
       notificar(mensagemErro(error, "Não foi possível excluir este comentário."));

@@ -23,7 +23,8 @@ cp .env.example .env.local
 
 | Variável | Padrão | Descrição |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | URL base do backend, sem barra final. É embutida no build: gere o build de novo ao alterá-la. |
+| `BACKEND_URL` | `http://localhost:8080` | Endereço do backend, sem barra final. O navegador chama `/backend/...` no próprio front-end e o Next repassa para cá (rewrites em `next.config.js`). Lido no build e no `next start`. |
+| `NEXT_PUBLIC_API_URL` | `/backend` | Opcional. Só defina para chamar o backend direto do navegador — exige CORS liberado no backend. Embutida no build. |
 
 ## 3. Executar
 
@@ -35,8 +36,10 @@ npm run start        # serve o build (porta 3000)
 
 ## 4. Conectar ao backend original
 
-O backend libera CORS apenas para a origem definida na variável `FRONTEND_URL_1` do `.env` dele
-(`cors.originPatterns`). Para rodar o front em `http://localhost:3000`, o `.env` do backend deve conter:
+Por padrão o front-end não depende de CORS: as requisições vão para `/backend/...` na mesma origem e o
+Next as encaminha para `BACKEND_URL`. Isso é necessário com o backend atual, cujo `SecurityConfig` não aplica
+a configuração de CORS e responde 403 ao preflight das rotas autenticadas. Se preferir chamar o backend
+diretamente (`NEXT_PUBLIC_API_URL`), o `.env` dele precisa liberar a origem do front-end:
 
 ```
 FRONTEND_URL_1=http://localhost:3000
@@ -50,6 +53,10 @@ Outros pontos do backend que afetam o front:
 - **Usuário administrador inicial**: `adm@gmail.com` / `adm1234567` (criado pelo `DataInitializer` do backend).
 - Os IDs de roles, tipos de vínculo e tipos de conteúdo usados pelo front (`ROLE_ID_MAP`, `TIPO_VINCULO_ID`,
   `TIPO_CONTEUDO`) seguem a ordem em que o `DataInitializer` os cria em um banco vazio.
+- **Cadastro**: o backend envia o código de verificação por e-mail de forma síncrona; sem SMTP (`MAIL_*`) o
+  cadastro falha com erro 500.
+- **Riscos de projeto**: o catálogo (`/risco-projeto`) vem da migration de seeds do backend ou é cadastrado em
+  Admin → Riscos de projeto.
 
 ## 5. Verificações e testes
 
@@ -75,6 +82,7 @@ app/
 tests/               testes unitários (Vitest)
 ```
 
-O relatório completo da auditoria está em `RELATORIO_TECNICO.md`; as correções de perfil estão em
+A auditoria mais recente (backend com riscos, termos por projeto e solicitações de vínculo) está em
+`RELATORIO_AUDITORIA_V32.md`. O relatório completo da auditoria inicial está em `RELATORIO_TECNICO.md`; as correções de perfil estão em
 `RELATORIO_PERFIL.md` e as da auditoria mais recente (limites do banco, exclusões seguras, testes E2E) em
 `RELATORIO_CORRECOES.md`.

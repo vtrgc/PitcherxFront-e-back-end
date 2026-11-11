@@ -55,7 +55,7 @@ import { obterRolePrincipal, ROLE_LABEL } from "../../services/usuario.service";
 import { ehEmpresa, projetosApoiadosPor } from "../../services/empresa.service";
 import { Post } from "../../types/Post";
 import { Projeto } from "../../types/Projeto";
-import { ProjetoUsuario, rotuloVinculo } from "../../types/ProjetoUsuario";
+import { ProjetoUsuario, TIPO_VINCULO_ID, rotuloVinculo } from "../../types/ProjetoUsuario";
 
 type Aba = "publicacoes" | "projetos" | "apoiados";
 type Estado<T> = { dados: T; carregando: boolean; erro: string };
@@ -176,7 +176,8 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
       setTodosProjetos(lista ?? []);
       const porId = new Map((lista ?? []).map((p) => [p.idProjeto, p]));
       const agrupados = new Map<number, ProjetoDoPerfil>();
-      for (const v of (vinculos ?? []) as ProjetoUsuario[]) {
+      // Visualizador só aceitou os termos para acompanhar o projeto: não entra no portfólio.
+      for (const v of ((vinculos ?? []) as ProjetoUsuario[]).filter((x) => x.tipoVinculoId !== TIPO_VINCULO_ID.VISUALIZADOR)) {
         const item = agrupados.get(v.projetoId) ?? { projetoId: v.projetoId, projeto: porId.get(v.projetoId) ?? null, vinculos: [] };
         const rotulo = rotuloVinculo(v.nomeTipoVinculo);
         if (!item.vinculos.includes(rotulo)) item.vinculos.push(rotulo);
