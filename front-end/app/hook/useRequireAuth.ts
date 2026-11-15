@@ -37,14 +37,18 @@ export function useRequireAuth(area: AreaPagina = "autenticado") {
       return;
     }
     if (aguardandoVerificacao) {
-      const destino = pathname && pathname !== "/" ? `?redirect=${encodeURIComponent(pathname)}` : "";
-      router.replace(`/auth/verificar-conta${destino}`);
+      const params = new URLSearchParams();
+      // Código ainda não digitado = primeiro acesso: depois dele vem "Completar cadastro".
+      if (usuario?.verificado === false) params.set("novo", "1");
+      if (pathname && pathname !== "/") params.set("redirect", pathname);
+      const query = params.toString();
+      router.replace(`/auth/verificar-conta${query ? `?${query}` : ""}`);
       return;
     }
     if (bloqueadoParaAdmin) {
       router.replace("/admin");
     }
-  }, [isLoading, isAuthenticated, bloqueadoParaAdmin, aguardandoVerificacao, router, pathname, sessaoExpirada]);
+  }, [isLoading, isAuthenticated, bloqueadoParaAdmin, aguardandoVerificacao, router, pathname, sessaoExpirada, usuario?.verificado]);
 
   return {
     usuario,

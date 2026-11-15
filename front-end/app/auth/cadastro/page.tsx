@@ -31,7 +31,8 @@ export default function Cadastro() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && !loading) {
-      if (usuarioLogado && (!usuarioLogado.isActive || usuarioLogado.verificado === false)) router.replace("/auth/verificar-conta");
+      if (usuarioLogado && (!usuarioLogado.isActive || usuarioLogado.verificado === false))
+        router.replace(usuarioLogado.verificado === false ? "/auth/verificar-conta?novo=1" : "/auth/verificar-conta");
       else router.replace(isAdmin ? "/admin" : "/feed");
     }
   }, [isLoading, isAuthenticated, isAdmin, router, loading, usuarioLogado]);

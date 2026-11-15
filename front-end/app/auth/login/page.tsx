@@ -40,7 +40,8 @@ function LoginConteudo() {
   // Quem já está logado não precisa ver a tela de login.
   useEffect(() => {
     if (!isLoading && isAuthenticated && !loading) {
-      if (usuarioLogado && (!usuarioLogado.isActive || usuarioLogado.verificado === false)) router.replace("/auth/verificar-conta");
+      if (usuarioLogado && (!usuarioLogado.isActive || usuarioLogado.verificado === false))
+        router.replace(usuarioLogado.verificado === false ? "/auth/verificar-conta?novo=1" : "/auth/verificar-conta");
       else router.replace(isAdmin ? "/admin" : destino || "/feed");
     }
   }, [isLoading, isAuthenticated, isAdmin, destino, router, loading, usuarioLogado]);
