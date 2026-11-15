@@ -4,7 +4,7 @@ Três roteiros que usam o **front e o backend rodando de verdade** (nada é simu
 
 | Arquivo | O que testa |
 | --- | --- |
-| `api_auditoria.py` | Todos os endpoints do backend (176), fluxos completos e regras de permissão: cadastro, aprovação de identidade, login, recuperação de senha, perfil, projetos, propostas, contrapropostas, contratos, publicações, curtidas, comentários, conexões, notificações, denúncias, administração e tokens inválidos. Mostra a cobertura de endpoints no final. |
+| `api_auditoria.py` | Todos os endpoints do backend (177), fluxos completos e regras de permissão: cadastro, foto de verificação enviada sem login, aprovação de identidade, login, recuperação de senha, perfil, projetos, propostas, contrapropostas, contratos, publicações, curtidas, comentários, conexões, notificações, denúncias, administração e tokens inválidos. Mostra a cobertura de endpoints no final. |
 | `negociacao_navegador.js` | Playwright: cadastro (vazio, inválido, e-mail duplicado, válido), aprovação pelo admin, criar/editar/excluir projeto, acesso sem permissão, proposta, contrapropostas (rejeitar, nova, aceitar), aceite final, recusa e telas no celular. |
 | `navegador_auditoria.js` | Playwright: abre todas as páginas (visitante, admin e usuários) em computador, tablet e celular, procurando erros de execução, respostas HTTP de erro, imagens quebradas e rolagem horizontal; depois executa fluxos pela tela (logout, senha errada, redefinição de senha, edição da conta, foto, capa, biografia, publicar, curtir, comentar, buscar, seguir, trocar senha, cadastros do admin). |
 

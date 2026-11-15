@@ -93,7 +93,13 @@ export default function AdminIdentidadesPage() {
   }, [pronto, carregar]);
 
   async function aprovar(u: Usuario) {
-    const ok = await confirmar(`Aprovar a identidade de ${u.nomeUsuario}? A conta será ativada.`, { titulo: "Aprovar identidade", confirmarLabel: "Aprovar" });
+    const semFoto = !u.urlComprovanteIdentidade;
+    const ok = await confirmar(
+      semFoto
+        ? `${u.nomeUsuario} ainda não enviou a foto de verificação. Aprovar mesmo assim? A conta será ativada.`
+        : `Aprovar a identidade de ${u.nomeUsuario}? A conta será ativada.`,
+      { titulo: "Aprovar identidade", confirmarLabel: "Aprovar" }
+    );
     if (!ok) return;
     setProcessando(u.idUsuario);
     try {
@@ -258,7 +264,7 @@ export default function AdminIdentidadesPage() {
                     </a>
                   ) : (
                     <p className="mt-3 rounded-xl border border-dashed border-ink-200 px-3 py-4 text-center text-[12.5px] text-ink-500">
-                      Nenhum comprovante enviado.
+                      Nenhuma foto de verificação enviada ainda.
                     </p>
                   )}
                   <div className="mt-auto flex flex-wrap gap-2 pt-4">

@@ -38,13 +38,13 @@ Resultado: **198/198 sem nenhum desses problemas** — **APROVADO**.
 
 ## 2. Endpoints identificados e testados
 
-- **176 endpoints** identificados nos controllers (método + caminho).
-- **176/176 chamados** pelo roteiro de API, com **252 verificações** de resposta, regra de negócio, persistência no banco e permissão: **252 aprovadas, 0 reprovadas**.
+- **177 endpoints** identificados nos controllers (método + caminho), incluindo o novo envio da foto de verificação sem login.
+- **177/177 chamados** pelo roteiro de API, com **258 verificações** de resposta, regra de negócio, persistência no banco e permissão: **258 aprovadas, 0 reprovadas**.
 - O log do backend no fim da bateria tem **0 "Erro interno não tratado"** e **0 linhas de nível ERROR**. Os avisos que aparecem são as recusas provocadas de propósito pelos testes (403, senha errada, conta não ativada, validação).
 
 | Grupo | Verificações |
 | --- | --- |
-| Cadastro e autenticação | 30 |
+| Cadastro e autenticação (com a foto de verificação) | 36 |
 | Usuário e perfil | 32 |
 | Catálogos e administração | 30 |
 | Projetos | 30 |
@@ -54,7 +54,7 @@ Resultado: **198/198 sem nenhum desses problemas** — **APROVADO**.
 | Denúncias e moderação | 9 |
 | Demais endpoints (leitura, edição e exclusão) | 44 |
 | Sessão e conta desativada | 4 |
-| **Total** | **252** |
+| **Total** | **258** |
 
 ## 3. Funcionalidades testadas
 
@@ -63,6 +63,7 @@ Todas foram testadas com operação real: requisição → resposta → banco �
 | Funcionalidade | O que foi testado | Status |
 | --- | --- | --- |
 | Cadastro | Campos vazios, inválidos, e-mail duplicado, cadastro válido, código de verificação por e-mail | APROVADO |
+| Verificação por foto | A pessoa envia a foto (rosto + documento) logo após o cadastro, ou reenvia pela tela de login se for reprovada; o admin vê a foto antes de aprovar | CORRIGIDO |
 | Aprovação de identidade | Admin aprova e reprova, e-mail enviado ao usuário | CORRIGIDO |
 | Login / logout | Senha errada, login, sessão persiste ao recarregar, logout remove o token | APROVADO |
 | Recuperação e redefinição de senha | E-mail com código, código inválido, redefinir pela tela e entrar com a nova senha | CORRIGIDO |
@@ -87,7 +88,7 @@ Todas foram testadas com operação real: requisição → resposta → banco �
 
 ## 4. Erros encontrados
 
-Foram **40 defeitos** no total: 32 no backend e 8 no front.
+Foram **42 defeitos** no total: 33 no backend e 9 no front (os itens 41 e 42 foram encontrados depois da primeira versão deste relatório).
 
 ### Backend: execução e banco
 
@@ -141,9 +142,14 @@ Foram **40 defeitos** no total: 32 no backend e 8 no front.
 39. A autoria das propostas dependia do navegador (localStorage) e de um bloco de texto na descrição, em vez de vir do servidor.
 40. As recomendações faziam uma checagem prévia de perfil que escondia o resultado.
 
+### Verificação por foto (encontrados depois)
+
+41. Backend: a pessoa só podia enviar a foto de verificação estando logada, mas o login só é liberado depois da aprovação. Na prática, conta nova nunca conseguia mandar a foto e conta reprovada não conseguia reenviar; o admin aprovava sem ver foto nenhuma.
+42. Front: a tela de cadastro mandava enviar o comprovante "depois de entrar" (impossível), e o admin podia aprovar uma conta sem foto sem nenhum aviso.
+
 ## 5. Erros corrigidos
 
-**Todos os 40 itens acima foram CORRIGIDOS e testados de novo** com os três roteiros, que passaram por completo depois das correções.
+**Todos os 42 itens acima foram CORRIGIDOS e testados de novo** com os três roteiros, que passaram por completo depois das correções.
 
 | Área | Principais mudanças |
 | --- | --- |
@@ -154,8 +160,9 @@ Foram **40 defeitos** no total: 32 no backend e 8 no front.
 | Backend: sessão | `JWT_SECRET` lido do ambiente, validade de 7 dias, `SecurityFilter` ignora token de conta inexistente ou desativada |
 | Backend: regras | Validações de proposta, contraproposta, contrato, projeto e solicitação. Exclusão de conta limpa os vínculos ou responde 400 com explicação. E-mails não derrubam a operação (a falha fica registrada no log). |
 | Backend: DTOs e mappers | `PropostaMapper`/`PropostaResponseDTO` (id, projeto, autor), `ContratoMapper` (id da proposta), `UsuarioMapper` (não sobrescreve senha nem foto), DTOs de perfil com biografia, contraproposta com justificativa |
-| Backend: templates | `identidade-aprovada.html` e `identidade-reprovada.html` |
-| Front | `DadosConta` (nome, e-mail e telefone com confirmação da senha), biografia no perfil, contratos (quem pode aceitar e editar), propostas (autor vindo do servidor, valor atualizado após contraproposta, justificativa), CRUD do admin, `usuario.service`, recomendações |
+| Backend: verificação por foto | Novo endpoint público `POST /usuario/cadastro/comprovante-identidade` (e-mail, senha e foto): só aceita conta ainda inativa, responde a mesma mensagem para e-mail inexistente e senha errada, e reaproveita a regra existente (volta a PENDENTE, conta o envio, limite de 5 após reprovação, avisa os admins) |
+| Backend: templates | `identidade-aprovada.html` e `identidade-reprovada.html` (este explica como reenviar a foto pela tela de login) |
+| Front | `EnvioFotoVerificacao` (foto com prévia na tela "Conta criada" e na tela de login de conta aguardando aprovação), aviso ao admin ao aprovar conta sem foto, `DadosConta` (nome, e-mail e telefone com confirmação da senha), biografia no perfil, contratos (quem pode aceitar e editar), propostas (autor vindo do servidor, valor atualizado após contraproposta, justificativa), CRUD do admin, `usuario.service`, recomendações |
 
 A arquitetura existente foi mantida: nenhum recurso foi removido e nenhum endpoint mudou de caminho.
 
@@ -173,7 +180,6 @@ cadastro com verificação por e-mail, aprovação de identidade, login, logout,
 | CPF/CNPJ no perfil | O identificador do perfil continua visível em `GET /perfil-usuario` para usuários logados. Não foi ocultado nesta auditoria porque é preciso decidir quem pode ver esse dado (dono, admin, parceiros do projeto). | REPROVADO |
 | Login revela se o e-mail existe | Responde 404 para e-mail desconhecido e 400 para senha errada | REPROVADO |
 | Código de redefinição sem limite de tentativas | O código tem 6 dígitos e não há limite de tentativas nem de requisições | REPROVADO |
-| Comprovante de conta nova | Uma conta ainda inativa não consegue enviar o próprio comprovante de identidade, e o envio precisa ser feito pelo admin | REPROVADO |
 | Imagens externas (Unsplash) | O host não é acessível pela rede deste ambiente | NÃO TESTADO |
 
 ## 8. Problemas de integração
@@ -187,16 +193,17 @@ cadastro com verificação por e-mail, aprovação de identidade, login, logout,
 | Edição da conta × token | O token identifica o usuário pelo e-mail. Quando o e-mail muda, o front entra de novo automaticamente com o novo e-mail. | CORRIGIDO |
 | Proxy `/backend` do Next | Todas as chamadas do navegador passaram pelo proxy sem erro | APROVADO |
 | Upload de foto, capa e comprovante | Arquivo enviado, URL salva no banco e imagem exibida após recarregar | APROVADO |
+| Foto de verificação × login bloqueado | O envio exigia token, mas conta inativa não recebe token. Criado o envio com e-mail e senha para conta inativa, usado pelo cadastro e pelo login. | CORRIGIDO |
 
 ## 9. Resultado dos testes automatizados
 
 | Teste | Resultado | Status |
 | --- | --- | --- |
-| API ponta a ponta (`e2e/api_auditoria.py`) | 252/252 verificações, 176/176 endpoints | APROVADO |
+| API ponta a ponta (`e2e/api_auditoria.py`) | 258/258 verificações, 177/177 endpoints | APROVADO |
 | Navegador: páginas (`e2e/navegador_auditoria.js`) | 198/198 aberturas sem erros (49 rotas × perfis × 3 tamanhos) | APROVADO |
 | Navegador: fluxos (`e2e/navegador_auditoria.js`) | 33/33 aprovados, 1 não testado (imagens do Unsplash) | APROVADO |
 | Negociação no navegador (`e2e/negociacao_navegador.js`) | 47/47. Os únicos HTTP 400 foram os provocados de propósito: e-mail duplicado e login de conta inativa. | APROVADO |
-| Front: testes unitários (vitest) | 113/113 | APROVADO |
+| Front: testes unitários (vitest) | 114/114 (inclui o envio da foto sem login) | APROVADO |
 | Front: TypeScript (`tsc --noEmit`) | 0 erros | APROVADO |
 | Front: ESLint | 0 erros. Os 44 avisos já existiam antes da auditoria; nenhum aviso novo. | APROVADO |
 | Backend: `mvn test` | 24 testes, 0 falhas e 0 erros (19 que já existiam e 5 novos em `PermissoesTest`) | APROVADO |
@@ -220,3 +227,4 @@ cadastro com verificação por e-mail, aprovação de identidade, login, logout,
 | Migrações num banco com dados | Testadas apenas num banco vazio. Antes de aplicar em produção, faça backup e rode `V43`, `V44` e `V45` numa cópia (a `V45` troca a restrição única do título do termo de vínculo). | NÃO TESTADO |
 | Imagens do Unsplash | Dependem do acesso à internet do servidor e do navegador | NÃO TESTADO |
 | `BACKEND_URL` do front | Precisa apontar para o backend no ambiente de publicação | APROVADO (testado localmente) |
+| `FRONTEND_URL_1` do backend (CORS) | Precisa ser exatamente o endereço do site. Com outro endereço (por exemplo `127.0.0.1` em vez de `localhost`), o backend recusa o cadastro e as demais chamadas com "Você não tem permissão". | APROVADO (testado localmente) |

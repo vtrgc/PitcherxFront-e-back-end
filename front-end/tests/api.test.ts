@@ -202,4 +202,23 @@ describe("contratos dos serviços com o backend", () => {
     expect(getToken()).toBe(token);
     await expect(login({ emailUsuario: "a@a.com", senhaUsuario: "x" })).rejects.toThrow();
   });
+  it("foto de verificação sem login: multipart com e-mail, senha e arquivo, sem token", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(respostaJson(200, { idUsuario: 4, statusAnaliseIdentidade: "PENDENTE", tentativasIdentidade: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { enviarFotoVerificacaoSemLogin } = await import("../app/services/usuario.service");
+    const arquivo = new File([new Uint8Array([1, 2, 3])], "rosto.png", { type: "image/png" });
+    const r = await enviarFotoVerificacaoSemLogin(" lucas@exemplo.com ", "Senha123", arquivo);
+    expect(r.tentativasIdentidade).toBe(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/backend/usuario/cadastro/comprovante-identidade");
+    expect(init.method).toBe("POST");
+    const corpo = init.body as FormData;
+    expect(corpo.get("emailUsuario")).toBe("lucas@exemplo.com");
+    expect(corpo.get("senhaUsuario")).toBe("Senha123");
+    expect((corpo.get("arquivo") as File).name).toBe("rosto.png");
+    const headers = new Headers(init.headers);
+    expect(headers.get("Authorization")).toBeNull();
+    // o navegador define o boundary do multipart; o front não pode fixar Content-Type
+    expect(headers.get("Content-Type")).toBeNull();
+  });
 });

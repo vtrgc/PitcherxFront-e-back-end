@@ -83,6 +83,21 @@ import java.util.List;
             return ResponseEntity.status(HttpStatus.OK).body(response);
         }
 
+        /**
+         * Conta nova (ou reprovada) ainda não consegue entrar — o login só vale depois da aprovação —,
+         * então não tem token para usar o endpoint acima. Aqui ela envia a foto confirmando e-mail e
+         * senha. Só funciona enquanto a conta estiver inativa.
+         */
+        @PostMapping(value = "/cadastro/comprovante-identidade", consumes = "multipart/form-data")
+        @Operation(summary = "Enviar a foto de verificação antes da aprovação (conta inativa, com e-mail e senha)")
+        public ResponseEntity<UsuarioResponseDTO> enviarComprovanteAntesDoLogin(
+                @RequestParam("emailUsuario") String emailUsuario,
+                @RequestParam("senhaUsuario") String senhaUsuario,
+                @RequestParam("arquivo") MultipartFile arquivo) {
+            UsuarioResponseDTO response = usuarioService.enviarComprovanteAntesDoLogin(emailUsuario, senhaUsuario, arquivo);
+            return ResponseEntity.status(HttpStatus.OK).body(response);
+        }
+
         /* ========================================================================
            NOVO: Análise de identidade (apenas admin)
            ======================================================================== */

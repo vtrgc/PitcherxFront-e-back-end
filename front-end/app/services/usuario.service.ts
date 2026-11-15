@@ -198,6 +198,19 @@ export async function enviarComprovanteIdentidade(id: number, arquivo: File) {
   return r;
 }
 
+/**
+ * POST /usuario/cadastro/comprovante-identidade (multipart: emailUsuario, senhaUsuario, arquivo).
+ * Para quem ainda não consegue entrar — conta nova aguardando aprovação ou reprovada —, que por
+ * isso não tem token para usar o endpoint acima. Recusado quando a conta já está ativa.
+ */
+export async function enviarFotoVerificacaoSemLogin(emailUsuario: string, senhaUsuario: string, arquivo: File) {
+  const formData = new FormData();
+  formData.append("emailUsuario", emailUsuario.trim());
+  formData.append("senhaUsuario", senhaUsuario);
+  formData.append("arquivo", arquivo);
+  return api<Usuario>("/usuario/cadastro/comprovante-identidade", { method: "POST", body: formData, timeoutMs: 120000 });
+}
+
 /** GET /usuario/admin/identidade-pendentes (Page<UsuarioResponseDTO>). */
 export async function listarIdentidadesPendentes(page = 0, size = 20): Promise<Pagina<Usuario>> {
   return normalizarPagina<Usuario>(await api<unknown>(`/usuario/admin/identidade-pendentes?page=${page}&size=${size}`));

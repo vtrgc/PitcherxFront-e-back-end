@@ -403,6 +403,100 @@
 }
 
 /* --------------------------------------------------------------------------
+   Foto de verificação de identidade (cadastro e login de conta inativa)
+   -------------------------------------------------------------------------- */
+.ax-foto {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--ax-line);
+  border-radius: 16px;
+  background: var(--ax-soft);
+}
+.ax-foto__titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ax-ink);
+}
+.ax-foto__titulo svg {
+  color: var(--ax-violet);
+}
+.ax-foto__texto {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ax-muted);
+}
+.ax-foto__intro {
+  font-weight: 600;
+  color: var(--ax-ink);
+}
+.ax-foto__vazio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 12px;
+  border: 1.5px dashed var(--ax-line-strong);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ax-violet-deep);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.ax-foto__vazio:hover {
+  border-color: var(--ax-violet);
+  background: #faf8ff;
+}
+.ax-foto__previa {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border: 1px solid var(--ax-line);
+  border-radius: 12px;
+  background: #fff;
+}
+.ax-foto__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ax-foto__acoes:empty {
+  display: none;
+}
+.ax-foto__trocar {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ax-violet-deep);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+.ax-foto__enviar {
+  width: auto;
+  height: 44px;
+  margin-left: auto;
+  font-size: 15px;
+}
+.ax-root input[type="file"].sr-only:focus-visible + .ax-foto__vazio,
+.ax-root input[type="file"].sr-only:focus-visible + .ax-foto__previa {
+  outline: 3px solid rgba(124, 60, 245, 0.5);
+  outline-offset: 3px;
+}
+
+/* --------------------------------------------------------------------------
    Movimento: uma única entrada orquestrada (painel + ilustração)
    -------------------------------------------------------------------------- */
 @keyframes axPanelIn {

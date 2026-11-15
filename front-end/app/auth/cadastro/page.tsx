@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clock, Lock, Mail, MailCheck, Phone, ShieldCheck, User } from "lucide-react";
+import { Camera, Clock, Lock, Mail, MailCheck, Phone, ShieldCheck, User } from "lucide-react";
 import { cadastrarUsuario } from "../../services/usuario.service";
 import { useAuth } from "../../context/AuthContext";
 import { ApiError, NetworkError } from "../../lib/api";
@@ -12,6 +12,7 @@ import AuthShell from "../../components/auth/AuthShell";
 import AuthField from "../../components/auth/AuthField";
 import AuthButton from "../../components/auth/AuthButton";
 import AuthAlert from "../../components/auth/AuthAlert";
+import EnvioFotoVerificacao from "../../components/auth/EnvioFotoVerificacao";
 
 export default function Cadastro() {
   const router = useRouter();
@@ -102,10 +103,16 @@ export default function Cadastro() {
           </p>
           <ol className="mt-5 space-y-3 text-[14px] text-ink-700">
             <li className="flex gap-3">
+              <Camera size={18} className="mt-0.5 shrink-0 text-brand-600" aria-hidden="true" />
+              <span>
+                <strong>Envie a foto de verificação</strong> logo abaixo. Para manter a plataforma segura, a administração confere a
+                identidade de cada nova conta.
+              </span>
+            </li>
+            <li className="flex gap-3">
               <Clock size={18} className="mt-0.5 shrink-0 text-brand-600" aria-hidden="true" />
               <span>
-                <strong>Aguarde a aprovação.</strong> Para manter a plataforma segura, a administração confere cada nova conta. Você
-                receberá um e-mail quando ela for liberada.
+                <strong>Aguarde a aprovação.</strong> Você receberá um e-mail quando a conta for liberada.
               </span>
             </li>
             <li className="flex gap-3">
@@ -116,14 +123,16 @@ export default function Cadastro() {
             </li>
             <li className="flex gap-3">
               <ShieldCheck size={18} className="mt-0.5 shrink-0 text-brand-600" aria-hidden="true" />
-              <span>
-                Depois de entrar, envie o comprovante de identidade em <strong>Configurações</strong> e complete o seu perfil.
-              </span>
+              <span>Depois de entrar, complete o seu perfil.</span>
             </li>
           </ol>
-          <Link href="/auth/login?cadastro=1" className="ax-btn mt-7 inline-flex w-full items-center justify-center">
-            Ir para o login
-          </Link>
+          <EnvioFotoVerificacao email={contaCriada} senha={senha} />
+          {/* .ax-btn zera a margem; o espaço fica no contêiner */}
+          <div className="mt-6">
+            <Link href="/auth/login?cadastro=1" className="ax-btn inline-flex w-full items-center justify-center">
+              Ir para o login
+            </Link>
+          </div>
         </div>
       </AuthShell>
     );

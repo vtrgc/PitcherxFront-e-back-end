@@ -56,7 +56,11 @@ def _req(method, path, token=None, body=None, files=None, raw=False):
     if files:
         b = uuid.uuid4().hex
         partes = []
-        for nome, (fn, conteudo, tipo) in files:
+        for nome, valor in files:
+            if isinstance(valor, str):  # campo de texto do formulário
+                partes.append(f'--{b}\r\nContent-Disposition: form-data; name="{nome}"\r\n\r\n{valor}\r\n'.encode())
+                continue
+            fn, conteudo, tipo = valor
             partes.append(f'--{b}\r\nContent-Disposition: form-data; name="{nome}"; filename="{fn}"\r\nContent-Type: {tipo}\r\n\r\n'.encode() + conteudo + b"\r\n")
         data = b"".join(partes) + f"--{b}--\r\n".encode()
         headers["Content-Type"] = f"multipart/form-data; boundary={b}"
@@ -156,6 +160,22 @@ chk("e-mail duplicado -> 400", s == 400 and "email" in str(r).lower(), (s, r))
 s, r = req("POST", "/usuario/login", body={"emailUsuario": usuarios["criador"]["email"], "senhaUsuario": SENHA})
 chk("login antes da aprovação -> 400 'não foi ativada'", s == 400 and "ativad" in str(r), (s, r))
 
+# foto de verificação enviada pela própria pessoa, antes de conseguir entrar
+FOTO_SEM_LOGIN = "/usuario/cadastro/comprovante-identidade"
+foto = lambda email, senha: [("emailUsuario", email), ("senhaUsuario", senha), ("arquivo", ("rosto.png", png(), "image/png"))]
+s, r = req("POST", FOTO_SEM_LOGIN, files=foto(usuarios["investidor"]["email"], "SenhaErrada1"))
+chk("foto de verificação sem login com senha errada -> 400", s == 400 and "incorretos" in str(r), (s, r))
+msg_senha = str(r)
+s, r = req("POST", FOTO_SEM_LOGIN, files=foto(f"ninguem.{sufixo}@teste.com", SENHA))
+chk("foto de verificação com e-mail inexistente -> 400 com a mesma mensagem", s == 400 and str(r.get("message") if isinstance(r, dict) else r) in msg_senha, (s, r))
+s, r = req("POST", FOTO_SEM_LOGIN, files=foto(usuarios["investidor"]["email"], SENHA))
+chk("conta nova envia a própria foto sem login -> 200, PENDENTE, 1 envio (antes impossível)",
+    s == 200 and r.get("urlComprovanteIdentidade") and r.get("statusAnaliseIdentidade") == "PENDENTE"
+    and r.get("tentativasIdentidade") == 1 and r.get("active") is False, (s, r))
+s, r = req("GET", "/usuario/admin/identidade-pendentes?page=0&size=500", adm)
+pend = {u.get("idUsuario"): u for u in (r.get("content", []) if isinstance(r, dict) else [])}
+chk("admin vê a foto enviada na fila de análise", s == 200 and (pend.get(usuarios["investidor"]["id"]) or {}).get("urlComprovanteIdentidade"), (s, len(pend)))
+
 s, r = req("POST", f"/usuario/{usuarios['criador']['id']}/comprovante-identidade", adm, files=[("arquivo", ("doc.png", png(), "image/png"))])
 chk("admin anexa comprovante", s == 200 and r.get("urlComprovanteIdentidade"), (s, r))
 s, r = req("POST", f"/usuario/admin/analise-identidade/{usuarios['terceiro']['id']}", adm, {"status": "REPROVADA"})
@@ -166,13 +186,16 @@ for u in usuarios.values():
     s, r = req("POST", f"/usuario/admin/analise-identidade/{u['id']}", adm, {"status": "APROVADA"})
     if u is usuarios["terceiro"]:
         chk("identidade já analisada não pode ser reanalisada -> 400", s == 400, (s, r))
-        s, r = req("POST", f"/usuario/{u['id']}/comprovante-identidade", adm, files=[("arquivo", ("doc.png", png(), "image/png"))])
+        s, r = req("POST", FOTO_SEM_LOGIN, files=foto(u["email"], SENHA))
+        chk("conta reprovada reenvia a foto sem login -> 200, volta a PENDENTE", s == 200 and r.get("statusAnaliseIdentidade") == "PENDENTE", (s, r))
         s, r = req("POST", f"/usuario/admin/analise-identidade/{u['id']}", adm, {"status": "APROVADA"})
     chk(f"aprovar identidade de {u['nome']} -> 200 e conta ativa (antes 500)", s == 200 and r.get("active") is True and r.get("statusAnaliseIdentidade") == "APROVADA", (s, r))
 
 for u in usuarios.values():
     u["token"], _ = login(u["email"], SENHA)
 chk("login após aprovação", all(u["token"] for u in usuarios.values()))
+s, r = req("POST", FOTO_SEM_LOGIN, files=foto(usuarios["criador"]["email"], SENHA))
+chk("foto sem login para conta já ativa -> 400", s == 400 and "ativa" in str(r), (s, r))
 s, r = req("POST", "/usuario/login", body={"emailUsuario": usuarios["criador"]["email"], "senhaUsuario": "errada123"})
 chk("senha incorreta -> 400", s == 400, (s, r))
 s, r = req("GET", "/projeto", "token.invalido.aqui")

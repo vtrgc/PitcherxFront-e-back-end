@@ -332,6 +332,24 @@ public class UsuarioService {
        NOVO: Verificação de identidade (comprovante)
        ======================================================================== */
 
+    /**
+     * Envio da foto de verificação por quem ainda não pode entrar (conta inativa aguardando
+     * aprovação ou reprovada). A pessoa se identifica com e-mail e senha; a mensagem de erro é a
+     * mesma para e-mail inexistente e senha errada.
+     */
+    @Transactional
+    public UsuarioResponseDTO enviarComprovanteAntesDoLogin(String email, String senha, MultipartFile arquivo) {
+        String emailNormalizado = email == null ? "" : email.trim();
+        Usuario usuario = usuarioRepository.findUserByEmailUsuario(emailNormalizado)
+                .filter(u -> senha != null && passwordEncoder.matches(senha, u.getSenhaUsuario()))
+                .orElseThrow(() -> new IllegalArgumentException("E-mail ou senha incorretos."));
+
+        if (Boolean.TRUE.equals(usuario.getActive())) {
+            throw new BusinessException("Sua conta já está ativa. Entre na plataforma para ver a sua verificação.", "CONTA_JA_ATIVA");
+        }
+        return enviarComprovanteIdentidade(usuario.getIdUsuario(), arquivo);
+    }
+
     @Transactional
     public UsuarioResponseDTO enviarComprovanteIdentidade(Long idUsuario, MultipartFile arquivo) {
         Usuario usuario = usuarioRepository.findById(idUsuario)

@@ -33,6 +33,7 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
                         .requestMatchers("/usuario/login",
                                 "/usuario/cadastro-usuario",
+                                "/usuario/cadastro/comprovante-identidade",
                                 "/usuario/esqueci-senha",
                                 "/usuario/validar-token",
                                 "/usuario/resetar-senha",

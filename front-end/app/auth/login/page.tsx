@@ -11,6 +11,7 @@ import AuthShell from "../../components/auth/AuthShell";
 import AuthField from "../../components/auth/AuthField";
 import AuthButton from "../../components/auth/AuthButton";
 import AuthAlert from "../../components/auth/AuthAlert";
+import EnvioFotoVerificacao from "../../components/auth/EnvioFotoVerificacao";
 
 export default function Login() {
   return (
@@ -33,6 +34,8 @@ function LoginConteudo() {
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
+  // Conta inativa aguardando a análise da identidade: oferece o envio (ou reenvio) da foto.
+  const [aguardandoAprovacao, setAguardandoAprovacao] = useState(false);
 
   // Quem já está logado não precisa ver a tela de login.
   useEffect(() => {
@@ -49,6 +52,7 @@ function LoginConteudo() {
     }
 
     setErro("");
+    setAguardandoAprovacao(false);
     setLoading(true);
 
     try {
@@ -72,6 +76,7 @@ function LoginConteudo() {
         setErro(
           "Sua conta ainda não foi ativada. A administração está analisando sua identidade — você receberá um e-mail assim que ela for aprovada."
         );
+        setAguardandoAprovacao(true);
       } else if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 401)) {
         // O backend diferencia "e-mail inexistente" (404) de "senha errada" (400);
         // mostramos a mesma mensagem para não revelar quais e-mails têm conta.
@@ -148,6 +153,14 @@ function LoginConteudo() {
             Entrar
           </AuthButton>
         </form>
+
+        {aguardandoAprovacao && (
+          <EnvioFotoVerificacao
+            email={email}
+            senha={senha}
+            introducao="Ainda não enviou a foto de verificação, ou ela foi reprovada? Envie uma nova aqui."
+          />
+        )}
 
         <p className="ax-switch">
           Ainda não tem uma conta?{" "}
