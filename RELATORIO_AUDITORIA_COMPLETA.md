@@ -89,7 +89,7 @@ Todas foram testadas com operação real: requisição → resposta → banco �
 
 ## 4. Erros encontrados
 
-Foram **45 defeitos** no total: 35 no backend e 10 no front (os itens 41 a 45 foram encontrados depois da primeira versão deste relatório).
+Foram **46 defeitos** no total: 36 no backend e 10 no front (os itens 41 a 46 foram encontrados depois da primeira versão deste relatório).
 
 ### Backend: execução e banco
 
@@ -153,10 +153,11 @@ Foram **45 defeitos** no total: 35 no backend e 10 no front (os itens 41 a 45 fo
 43. Backend: `POST /usuario/verificar-conta` procurava o código no banco inteiro, sem conferir de quem era. Uma pessoa logada confirmava a conta de outra se acertasse o código dela, e dois cadastros com o mesmo código faziam a busca falhar.
 44. Backend: o login não informava se a conta já tinha digitado o código, não havia como pedir um código novo, o e-mail dizia que o código expirava em 15 minutos (o backend não tem prazo, e a aprovação costuma demorar mais), e a migração V25 não marcava como verificadas as contas antigas, que nunca receberam código.
 45. Front: o código nunca era pedido. Depois da aprovação o login ia direto para o feed, embora a tela de cadastro dissesse que ele seria pedido no primeiro acesso.
+46. Backend: quando o navegador fechava a conexão antes de receber a resposta (aba fechada, navegação interrompida), o tratador de erros registrava "Erro interno não tratado" com o rastro inteiro e tentava responder 500 numa conexão já fechada. Reproduzido com 40 desconexões forçadas (29 "erros internos"); depois da correção, 0.
 
 ## 5. Erros corrigidos
 
-**Todos os 45 itens acima foram CORRIGIDOS e testados de novo** com os três roteiros, que passaram por completo depois das correções.
+**Todos os 46 itens acima foram CORRIGIDOS e testados de novo** com os três roteiros, que passaram por completo depois das correções.
 
 | Área | Principais mudanças |
 | --- | --- |
@@ -169,6 +170,7 @@ Foram **45 defeitos** no total: 35 no backend e 10 no front (os itens 41 a 45 fo
 | Backend: DTOs e mappers | `PropostaMapper`/`PropostaResponseDTO` (id, projeto, autor), `ContratoMapper` (id da proposta), `UsuarioMapper` (não sobrescreve senha nem foto), DTOs de perfil com biografia, contraproposta com justificativa |
 | Backend: código de verificação | `verificar-conta` confere o código da conta logada; o login devolve `verificado`; novo `POST /usuario/reenviar-codigo-verificacao` (gera outro código, invalida o anterior e envia por e-mail); migração `V46` marca como verificadas as contas ativas sem código pendente (o que a V25 pretendia); admin semeado já nasce verificado; e-mail do código sem o prazo de 15 minutos que o backend não aplica |
 | Backend: verificação por foto | Novo endpoint público `POST /usuario/cadastro/comprovante-identidade` (e-mail, senha e foto): só aceita conta ainda inativa, responde a mesma mensagem para e-mail inexistente e senha errada, e reaproveita a regra existente (volta a PENDENTE, conta o envio, limite de 5 após reprovação, avisa os admins) |
+| Backend: erros | O tratador genérico reconhece cliente desconectado (`DisconnectedClientHelper`) e não registra mais isso como erro interno |
 | Backend: templates | `identidade-aprovada.html` e `identidade-reprovada.html` (este explica como reenviar a foto pela tela de login) |
 | Front | Código de verificação pedido no primeiro acesso (login e páginas protegidas levam à tela do código enquanto `verificado` for `false`), botão "peça um novo código", `EnvioFotoVerificacao` (foto com prévia na tela "Conta criada" e na tela de login de conta aguardando aprovação), aviso ao admin ao aprovar conta sem foto, `DadosConta` (nome, e-mail e telefone com confirmação da senha), biografia no perfil, contratos (quem pode aceitar e editar), propostas (autor vindo do servidor, valor atualizado após contraproposta, justificativa), CRUD do admin, `usuario.service`, recomendações |
 
@@ -209,8 +211,8 @@ cadastro com verificação por e-mail, aprovação de identidade, login, logout,
 | --- | --- | --- |
 | API ponta a ponta (`e2e/api_auditoria.py`) | 269/269 verificações, 178/178 endpoints | APROVADO |
 | Navegador: páginas (`e2e/navegador_auditoria.js`) | 198/198 aberturas sem erros (49 rotas × perfis × 3 tamanhos) | APROVADO |
-| Navegador: fluxos (`e2e/navegador_auditoria.js`) | 33/33 aprovados, 1 não testado (imagens do Unsplash) | APROVADO |
-| Negociação no navegador (`e2e/negociacao_navegador.js`) | 47/47. Os únicos HTTP 400 foram os provocados de propósito: e-mail duplicado e login de conta inativa. | APROVADO |
+| Navegador: fluxos (`e2e/navegador_auditoria.js`) | 40/40 aprovados (inclui os 7 do primeiro acesso com código), 1 não testado (imagens do Unsplash) | APROVADO |
+| Negociação no navegador (`e2e/negociacao_navegador.js`) | 51/51 (inclui o código no primeiro acesso das duas contas). Os únicos HTTP 400 foram os provocados de propósito: e-mail duplicado e login de conta inativa. | APROVADO |
 | Front: testes unitários (vitest) | 115/115 (inclui o envio da foto sem login e o reenvio do código) | APROVADO |
 | Front: TypeScript (`tsc --noEmit`) | 0 erros | APROVADO |
 | Front: ESLint | 0 erros. Os 44 avisos já existiam antes da auditoria; nenhum aviso novo. | APROVADO |

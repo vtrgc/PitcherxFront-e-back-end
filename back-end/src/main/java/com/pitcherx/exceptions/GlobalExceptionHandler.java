@@ -17,6 +17,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.util.DisconnectedClientHelper;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.pitcherx.security.JwtAuthenticationException;
@@ -175,6 +176,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex, WebRequest request) {
+        // O cliente fechou a conexão antes de receber a resposta (aba fechada, navegação
+        // interrompida). Não é erro do servidor e não há para quem responder.
+        if (DisconnectedClientHelper.isClientDisconnectedException(ex)) {
+            logger.debug("Cliente encerrou a conexão antes da resposta: {}", ex.getMessage());
+            return null;
+        }
         logger.error("Erro interno não tratado: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(buildErrorResponse("Ocorreu um erro interno no servidor. Tente novamente mais tarde.",
