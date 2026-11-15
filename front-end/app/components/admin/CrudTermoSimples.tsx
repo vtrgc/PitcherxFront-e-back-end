@@ -24,14 +24,12 @@ interface Props {
 /**
  * Cadastro de termos com título e descrição (termos de postagem e de vínculo).
  *
- * Regra do backend: GET e DELETE para ADMIN; POST/PUT somente para as roles USUARIO/EMPRESA.
- * Um administrador que também tenha uma dessas roles (Admin → Usuários → adicionar perfil,
- * seguido de novo login) pode cadastrar e editar — a tela libera o formulário conforme as
- * roles presentes no token da sessão.
+ * Regra do backend: leitura para todas as contas; cadastrar, editar e excluir só para ADMIN
+ * (antes o servidor invertia a regra e bloqueava justamente o administrador).
  */
 export default function CrudTermoSimples({ titulo, descricao, icone, listar, criar, atualizar, excluir }: Props) {
   const { usuario } = useAuth();
-  const podeEscrever = !!usuario?.roles.some((r) => r === "USUARIO" || r === "EMPRESA");
+  const podeEscrever = !!usuario?.roles.includes("ADMIN");
 
   return (
     <CrudAdmin<TermoSimples, { titulo: string; descricao: string }>
@@ -64,12 +62,7 @@ export default function CrudTermoSimples({ titulo, descricao, icone, listar, cri
       rotuloExcluir={(t) => t.titulo}
       excluir={(t) => excluir(t.id)}
       podeEscrever={podeEscrever}
-      avisoSomenteLeitura={
-        <>
-          O servidor só permite cadastrar e editar estes termos a contas com o perfil Usuário ou Empresa. Para cadastrar, adicione um desses
-          perfis à sua conta em Admin → Usuários e entre novamente. Como administrador, você pode consultar e excluir.
-        </>
-      }
+      avisoSomenteLeitura="Somente a administração cadastra e edita estes termos."
     />
   );
 }

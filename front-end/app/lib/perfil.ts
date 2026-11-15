@@ -46,7 +46,10 @@ export interface CamposProfissionalValor {
   linkedin: string;
   identificador: string;
   idEspecialidade: number | "";
+  biografia: string;
 }
+
+export const BIOGRAFIA_MAX = 1000;
 
 export type ErrosProfissional = Partial<Record<keyof CamposProfissionalValor, string>>;
 
@@ -55,18 +58,20 @@ export function profissionalInicial(perfil: PerfilUsuario | null): CamposProfiss
     linkedin: linkedinInformado(perfil?.linkedin) ? perfil!.linkedin : "",
     identificador: perfil?.identificador ?? "",
     idEspecialidade: perfil?.especialidade?.idEspecialidade ?? "",
+    biografia: perfil?.biografia ?? "",
   };
 }
 
 export function profissionalVazio(v: CamposProfissionalValor): boolean {
-  return !v.linkedin.trim() && !v.identificador.trim() && !v.idEspecialidade;
+  return !v.linkedin.trim() && !v.identificador.trim() && !v.idEspecialidade && !v.biografia.trim();
 }
 
 export function profissionalIgual(a: CamposProfissionalValor, b: CamposProfissionalValor): boolean {
   return (
     a.linkedin.trim() === b.linkedin.trim() &&
     somenteDigitos(a.identificador) === somenteDigitos(b.identificador) &&
-    Number(a.idEspecialidade || 0) === Number(b.idEspecialidade || 0)
+    Number(a.idEspecialidade || 0) === Number(b.idEspecialidade || 0) &&
+    a.biografia.trim() === b.biografia.trim()
   );
 }
 
@@ -81,6 +86,7 @@ export function validarProfissional(v: CamposProfissionalValor): ErrosProfission
   else if (link.length > LINKEDIN_MAX) erros.linkedin = `O link pode ter no máximo ${LINKEDIN_MAX} caracteres.`;
   if (!v.identificador.trim()) erros.identificador = "Informe seu CPF ou CNPJ.";
   else if (!documentoValido(v.identificador)) erros.identificador = "CPF ou CNPJ inválido.";
+  if (v.biografia.length > BIOGRAFIA_MAX) erros.biografia = `Use no máximo ${BIOGRAFIA_MAX} caracteres.`;
   return erros;
 }
 
@@ -90,6 +96,7 @@ export function paraRequestProfissional(v: CamposProfissionalValor, idUsuario: n
     identificador: formatarDocumento(v.identificador),
     idEspecialidade: Number(v.idEspecialidade),
     idUsuario,
+    biografia: v.biografia.trim(),
   };
 }
 

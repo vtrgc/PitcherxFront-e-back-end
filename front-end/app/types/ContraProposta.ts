@@ -19,6 +19,8 @@ export interface ContraProposta {
   status?: StatusContraProposta | string | null;
   dataCriacao?: string | null;
   dataDecisao?: string | null;
+  /** Justificativa de quem decidiu (obrigatória ao rejeitar). */
+  justificativaDecisao?: string | null;
 }
 
 /** ContraPropostaDecisionDTO — PUT /contra-proposta/{id}/aceitar | rejeitar. */

@@ -19,11 +19,11 @@ import {
 import { extensaoDoArquivo, TAMANHO_MAXIMO_FOTO, validarArquivoFoto } from "../app/lib/imagemPerfil";
 
 describe("perfil profissional (PerfilUsuarioRequestDTO)", () => {
-  const valido = { linkedin: "linkedin.com/in/ana", identificador: "52998224725", idEspecialidade: 3 as const };
+  const valido = { linkedin: "linkedin.com/in/ana", identificador: "52998224725", idEspecialidade: 3 as const, biografia: "" };
 
   it("exige área e CPF/CNPJ; LinkedIn é opcional", () => {
     expect(validarProfissional(valido)).toEqual({});
-    const parcial = validarProfissional({ linkedin: "linkedin.com/in/ana", identificador: "", idEspecialidade: "" });
+    const parcial = validarProfissional({ linkedin: "linkedin.com/in/ana", identificador: "", idEspecialidade: "", biografia: "" });
     expect(Object.keys(parcial).sort()).toEqual(["idEspecialidade", "identificador"]);
   });
 
@@ -31,6 +31,11 @@ describe("perfil profissional (PerfilUsuarioRequestDTO)", () => {
     expect(validarProfissional({ ...valido, linkedin: "javascript:alert(1)" }).linkedin).toBeTruthy();
     expect(validarProfissional({ ...valido, identificador: "111.111.111-11" }).identificador).toBeTruthy();
     expect(validarProfissional({ ...valido, linkedin: `linkedin.com/in/${"a".repeat(80)}` }).linkedin).toMatch(/80/);
+  });
+
+  it("biografia: opcional, até 1000 caracteres e enviada sem espaços nas pontas", () => {
+    expect(validarProfissional({ ...valido, biografia: "x".repeat(1001) }).biografia).toMatch(/1000/);
+    expect(paraRequestProfissional({ ...valido, biografia: "  Engenheira solar  " }, 9).biografia).toBe("Engenheira solar");
   });
 
   it("aceita perfil sem LinkedIn e envia o marcador exigido pelo @NotBlank do backend", () => {
@@ -54,6 +59,7 @@ describe("perfil profissional (PerfilUsuarioRequestDTO)", () => {
       identificador: "529.982.247-25",
       idEspecialidade: 3,
       idUsuario: 9,
+      biografia: "",
     });
   });
 

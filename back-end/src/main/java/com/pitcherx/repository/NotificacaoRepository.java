@@ -1,5 +1,6 @@
 package com.pitcherx.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
 import com.pitcherx.model.Notificacao;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,4 +22,9 @@ public interface NotificacaoRepository extends JpaRepository<Notificacao, Long> 
 
     @Query("SELECT COUNT(n) FROM Notificacao n WHERE n.usuario.idUsuario = :usuarioId AND n.lida = false")
     long countByUsuarioIdAndLidaFalse(@Param("usuarioId") Long usuarioId);
+
+    /** Usado na exclusão de conta. */
+    @Modifying
+    @Query("DELETE FROM Notificacao n WHERE n.usuario.idUsuario = :usuarioId")
+    int apagarDoUsuario(@Param("usuarioId") Long usuarioId);
 }

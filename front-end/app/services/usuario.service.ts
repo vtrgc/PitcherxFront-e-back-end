@@ -10,13 +10,7 @@ export function listarUsuarios() {
 }
 
 // ---------------------------------------------------------------------------
-// GET /usuario/{id}
-// ---------------------------------------------------------------------------
-// No backend, `getUsuarioById(Long id)` NÃO tem @PathVariable: o Spring liga o
-// parâmetro `id` à query string, não ao caminho. Chamar só `/usuario/5` faz o id
-// chegar nulo e o servidor responde 500. Enviando também `?id=5` a busca funciona
-// sem alterar o backend (o segmento do caminho continua necessário para casar a rota).
-//
+// GET /usuario/{id} (dados pessoais de terceiros vêm ocultos pelo backend).
 // Como o mesmo autor aparece em vários cards (posts, comentários, respostas), as
 // buscas ficam em cache por página para não repetir a mesma requisição.
 const cacheUsuarios = new Map<number, Promise<Usuario>>();
@@ -26,7 +20,7 @@ export function buscarUsuario(id: number, { forcar = false }: { forcar?: boolean
     const emCache = cacheUsuarios.get(id);
     if (emCache) return emCache;
   }
-  const promessa = api<Usuario>(`/usuario/${id}?id=${encodeURIComponent(id)}`);
+  const promessa = api<Usuario>(`/usuario/${id}`);
   cacheUsuarios.set(id, promessa);
   promessa.catch(() => cacheUsuarios.delete(id));
   return promessa;
@@ -81,13 +75,8 @@ export function logout() {
 }
 
 /**
- * PUT /usuario/{id}.
- *
- * ATENÇÃO — NÃO USADO PELA INTERFACE: no backend, `UsuarioService.atualizarUsuario`
- * gera o hash BCrypt da senha e, em seguida, `usuarioMapper.updateFromDTO` copia o
- * campo `senhaUsuario` do DTO (texto puro) por cima do hash. Depois disso o login
- * (`passwordEncoder.matches`) passa a falhar para o usuário. Mantido aqui apenas
- * para referência do contrato; só deve ser usado após a correção no servidor.
+ * PUT /usuario/{id} — nome, e-mail e telefone. `senhaUsuario` é a senha ATUAL, usada pelo
+ * backend como confirmação (a troca de senha é feita em redefinirSenha).
  */
 export async function atualizarUsuario(id: number, data: UsuarioRequest) {
   const atualizado = await api<Usuario>(`/usuario/${id}`, {

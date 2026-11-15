@@ -6,6 +6,7 @@ export interface PerfilUsuarioRequest {
   idUsuario: number;
   urlBanner?: string | null;
   urlVideoPerfil?: string | null;
+  biografia?: string | null;
 }
 
 export interface Especialidade {
@@ -28,6 +29,8 @@ export interface PerfilUsuario {
   urlBanner?: string | null;
   /** Vídeo de apresentação (POST/DELETE /perfil-usuario/{id}/video). */
   urlVideoPerfil?: string | null;
+  /** Texto livre "Sobre mim" (até 1000 caracteres). */
+  biografia?: string | null;
   especialidade: Especialidade;
   usuario: UsuarioSimples;
 }

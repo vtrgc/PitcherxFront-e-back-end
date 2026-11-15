@@ -31,8 +31,9 @@ public class PerfilUsuario {
 	@Column(name = "url_video_perfil")
 	private String urlVideoPerfil;
 	
-	@Lob
-	@Column(columnDefinition = "TEXT")
+	// Sem @Lob: no PostgreSQL, @Lob em String grava um "large object" (o texto virava um número
+	// de OID na coluna TEXT) e a leitura falhava com "Unable to access lob stream".
+	@Column(name = "biografia", columnDefinition = "TEXT")
 	private String biografia;
 	
 	@ManyToOne

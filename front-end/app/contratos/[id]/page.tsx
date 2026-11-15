@@ -99,9 +99,10 @@ export default function ContratoDetalhePage() {
   }, [isAuthenticated, carregar]);
 
   const podeGerenciar = isAdmin || ehDono;
-  // PUT /contrato/{id}/aceitar: ADMIN e USUARIO; quem aceita é a outra parte, não o criador.
-  const podeAceitar =
-    contrato?.statusContrato === "PENDENTE" && (isAdmin || (!!usuario?.roles?.includes("USUARIO") && !ehDono));
+  // PUT /contrato/{id}/aceitar: só o autor da proposta formalizada (ou o admin).
+  const propostaDoContrato = propostas.find((p) => p.idProposta === contrato?.propostaId);
+  const souAutorDaProposta = !!usuario && (propostaDoContrato?.usuarioId ?? propostaDoContrato?.autor?.id) === usuario.idUsuario;
+  const podeAceitar = contrato?.statusContrato === "PENDENTE" && (isAdmin || souAutorDaProposta);
 
   async function aceitar() {
     if (!contrato) return;
@@ -207,9 +208,11 @@ export default function ContratoDetalhePage() {
               )}
               {!editando && podeGerenciar && (
                 <div className="flex flex-wrap gap-2">
+                  {contrato.statusContrato !== "ACEITE" && (
                   <button type="button" onClick={() => setEditando(true)} className={`${cls.btnSecundario} !text-[13px]`}>
                     <Pencil size={14} aria-hidden="true" /> Editar
                   </button>
+                  )}
                   <button type="button" onClick={excluir} disabled={excluindo} className={`${cls.btnPerigo} !text-[13px]`}>
                     {excluindo ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} aria-hidden="true" />}
                     Excluir

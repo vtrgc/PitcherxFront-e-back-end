@@ -150,11 +150,15 @@ export default function Configuracoes() {
               <dd className="mt-0.5 text-ink-800">{usuario?.telefoneUsuario || "Não informado"}</dd>
             </div>
           </dl>
-          <p className="mt-3 pl-12 text-[12.5px] leading-5 text-ink-500">
-            Nome, e-mail e telefone ainda não podem ser alterados pelo PitcherX: a atualização de cadastro do servidor
-            (PUT /usuario) grava a senha sem criptografia e bloquearia o seu acesso. A edição será liberada quando o
-            servidor for corrigido.
-          </p>
+          {!isAdmin && (
+            <p className="mt-3 pl-12 text-[12.5px] leading-5 text-ink-500">
+              Para alterar nome, e-mail ou telefone, vá em{" "}
+              <Link href="/perfil/editar#basicas" className="font-semibold text-brand-700 hover:underline">
+                Editar perfil → Dados da conta
+              </Link>
+              .
+            </p>
+          )}
         </div>
 
         {!isAdmin && usuario && (

@@ -1,5 +1,8 @@
 package com.pitcherx.repository;
 
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import com.pitcherx.model.ProjetoInteracao;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -20,4 +23,9 @@ public interface ProjetoInteracaoRepository extends JpaRepository<ProjetoInterac
 
     void deleteByProjeto_IdProjetoAndUsuario_IdUsuarioAndTipoInteracao(
             Long projetoId, Long usuarioId, ProjetoInteracao.TipoInteracao tipoInteracao);
+
+    /** Usado na exclusão de conta. */
+    @Modifying
+    @Query("DELETE FROM ProjetoInteracao i WHERE i.usuario.idUsuario = :usuarioId")
+    int apagarDoUsuario(@Param("usuarioId") Long usuarioId);
 }

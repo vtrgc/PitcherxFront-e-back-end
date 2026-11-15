@@ -108,16 +108,15 @@ function ContratosPageContent() {
   }, [isAuthenticated, carregar]);
 
   const podeGerenciar = useCallback(
-    (projetoId: number) => isAdmin || (!!usuario?.roles?.includes("USUARIO") && meusProjetos.has(projetoId)),
+    (projetoId: number) => isAdmin || meusProjetos.has(projetoId),
     [isAdmin, meusProjetos, usuario?.roles]
   );
   const projetosDisponiveis = useMemo(
     () => (isAdmin ? projetos : projetos.filter((p) => meusProjetos.has(p.idProjeto))),
     [isAdmin, projetos, meusProjetos]
   );
-  // POST/PUT/DELETE /contrato aceitam ADMIN e USUARIO (o backend cita "EMPRESARIO", role
-  // inexistente): uma conta somente EMPRESA receberia 403, então não oferecemos a ação.
-  const contaPodeGerenciar = isAdmin || !!usuario?.roles?.includes("USUARIO");
+  // POST/PUT/DELETE /contrato: criador do projeto (USUARIO ou EMPRESA) ou ADMIN.
+  const contaPodeGerenciar = isAdmin || !!usuario?.roles?.some((r) => r === "USUARIO" || r === "EMPRESA");
   const podeCriar = contaPodeGerenciar && (isAdmin || projetosDisponiveis.length > 0);
 
   // Chegando de "Novo contrato" na página do projeto: abre o formulário uma única vez.
@@ -154,9 +153,11 @@ function ContratosPageContent() {
     await carregar();
   }
 
-  // PUT /contrato/{id}/aceitar aceita ADMIN e USUARIO. Quem aceita é a outra parte (não o criador).
+  // PUT /contrato/{id}/aceitar: só o autor da proposta formalizada (ou o admin).
+  const autorDaProposta = useMemo(() => new Map(propostas.map((p) => [p.idProposta, p.usuarioId ?? p.autor?.id ?? null])), [propostas]);
   const podeAceitar = (c: Contrato) =>
-    c.statusContrato === "PENDENTE" && (isAdmin || (!!usuario?.roles?.includes("USUARIO") && !meusProjetos.has(c.projetoId)));
+    c.statusContrato === "PENDENTE" &&
+    (isAdmin || (c.propostaId != null && idUsuario != null && autorDaProposta.get(c.propostaId) === idUsuario));
 
   async function aceitar(contrato: Contrato) {
     const ok = await confirmar(
@@ -287,7 +288,9 @@ function ContratosPageContent() {
         <>
         <div className="grid gap-5 md:grid-cols-2">
           {paginacao.itens.map((contrato) => {
+            // Contrato aceito não é mais alterado (regra do backend); excluir continua possível.
             const gerenciavel = podeGerenciar(contrato.projetoId);
+            const editavel = gerenciavel && contrato.statusContrato !== "ACEITE";
             return (
               <article key={contrato.idContrato} className={`${cls.card} flex flex-col p-5`}>
                 <div className="flex items-center justify-between gap-2">
@@ -297,6 +300,7 @@ function ContratosPageContent() {
                   </span>
                   {gerenciavel && (
                     <div className="flex items-center gap-1">
+                      {editavel && (
                       <button
                         type="button"
                         onClick={() => {
@@ -309,6 +313,7 @@ function ContratosPageContent() {
                       >
                         <Pencil size={15} />
                       </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => excluir(contrato)}

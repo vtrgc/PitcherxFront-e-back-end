@@ -1,6 +1,6 @@
 import { ApiError, api, mapComLimite } from "../lib/api";
 import { listarProjetos } from "./projeto.service";
-import { AutorProposta, lerDescricaoProposta, montarDescricaoProposta } from "../lib/autoriaProposta";
+import { AutorProposta, lerDescricaoProposta, textoDaProposta } from "../lib/autoriaProposta";
 import { Proposta, PropostaRequest } from "../types/Proposta";
 
 /*
@@ -76,7 +76,10 @@ function semCamposNulos(r: Proposta, id: number): Proposta {
 /** Separa o texto visível do bloco de autoria (ver lib/autoriaProposta). */
 export function normalizarProposta(p: Proposta): Proposta {
   if (!p || typeof p !== "object") return p;
-  const { texto, autor } = lerDescricaoProposta(p.descricaoProposta);
+  const { texto, autor: autorLegado } = lerDescricaoProposta(p.descricaoProposta);
+  // O backend agora devolve o autor (usuarioId/usuarioNome); o bloco na descrição só existe em
+  // propostas enviadas antes dessa correção.
+  const autor = typeof p.usuarioId === "number" ? { id: p.usuarioId, nome: p.usuarioNome || `Usuário #${p.usuarioId}` } : autorLegado;
   return { ...p, descricaoProposta: texto, autor };
 }
 
@@ -127,7 +130,9 @@ export async function buscarProposta(id: number): Promise<Proposta> {
  * (defeito do mapper), o id é descoberto logo em seguida: a proposta mais recente idêntica.
  */
 export async function criarProposta(data: PropostaRequest, autor?: AutorProposta | null): Promise<Proposta> {
-  const corpo = { ...data, descricaoProposta: montarDescricaoProposta(data.descricaoProposta, autor) };
+  // O servidor registra o autor pelo token; o texto vai limpo (sem o bloco de autoria legado).
+  void autor;
+  const corpo = { ...data, descricaoProposta: textoDaProposta(data.descricaoProposta) };
   const criada = await api<Proposta>("/proposta", {
     method: "POST",
     body: JSON.stringify(corpo),
@@ -147,9 +152,10 @@ export async function criarProposta(data: PropostaRequest, autor?: AutorProposta
 
 /** PUT /proposta/{id} — só o autor; bloqueado se houver contraproposta pendente. */
 export async function atualizarProposta(id: number, data: PropostaRequest, autor?: AutorProposta | null) {
+  void autor; // o backend identifica o autor pelo token
   const r = await api<Proposta>(`/proposta/${id}`, {
     method: "PUT",
-    body: JSON.stringify({ ...data, descricaoProposta: montarDescricaoProposta(data.descricaoProposta, autor) }),
+    body: JSON.stringify({ ...data, descricaoProposta: textoDaProposta(data.descricaoProposta) }),
   });
   invalidarCachePropostas();
   return semCamposNulos(r, id);

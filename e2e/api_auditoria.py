@@ -41,7 +41,16 @@ def nao_testado(nome, motivo):
     print(f"  --   {nome} (não testado: {motivo})")
 
 
+chamadas = []  # (método, caminho sem query, status) — para medir a cobertura de endpoints
+
+
 def req(method, path, token=None, body=None, files=None, raw=False):
+    s, r = _req(method, path, token, body, files, raw)
+    chamadas.append((method, path.split("?")[0], s))
+    return s, r
+
+
+def _req(method, path, token=None, body=None, files=None, raw=False):
     headers = {"Accept": "application/json"}
     data = None
     if files:
@@ -250,6 +259,12 @@ s, r = req("POST", f"/perfil-usuario/{pa}/video", A["token"], files=[("arquivo",
 chk("enviar vídeo de apresentação -> 200", s == 200 and r.get("urlVideoPerfil"), (s, r))
 s, r = req("PUT", f"/perfil-usuario/{pa}", A["token"], {"linkedin": "https://linkedin.com/in/ana2", "identificador": cpf_valido(int(sufixo, 16) % 10**8), "idEspecialidade": id_esp, "idUsuario": A["id"]})
 chk("editar perfil sem reenviar capa/vídeo não os apaga", s == 200 and r.get("urlBanner") and r.get("urlVideoPerfil"), (s, r))
+s, r = req("PUT", f"/perfil-usuario/{pa}", A["token"], {"linkedin": "https://linkedin.com/in/ana2", "identificador": cpf_valido(int(sufixo, 16) % 10**8), "idEspecialidade": id_esp, "idUsuario": A["id"], "biografia": "Engenheira de energia solar"})
+chk("salvar biografia (antes não era exposta pela API)", s == 200 and r.get("biografia") == "Engenheira de energia solar", (s, r))
+s, r = req("GET", f"/perfil-usuario/{pa}", B["token"])
+chk("biografia aparece para os outros", s == 200 and r.get("biografia") == "Engenheira de energia solar", (s, r))
+s, r = req("PUT", f"/perfil-usuario/{pa}", A["token"], {"linkedin": "https://linkedin.com/in/ana2", "identificador": cpf_valido(int(sufixo, 16) % 10**8), "idEspecialidade": id_esp, "idUsuario": A["id"], "biografia": "x" * 1001})
+chk("biografia acima de 1000 caracteres -> 400", s == 400, (s, r))
 s, r = req("PUT", f"/perfil-usuario/{pa}", B["token"], {"linkedin": "x", "identificador": "1", "idEspecialidade": id_esp, "idUsuario": A["id"]})
 chk("editar perfil de outra pessoa -> 403", s == 403, (s, r))
 s, r = req("PUT", f"/perfil-usuario/{pa}", A["token"], {"linkedin": "x", "identificador": cpf_valido(1), "idEspecialidade": id_esp, "idUsuario": B["id"]})
@@ -576,6 +591,132 @@ chk("admin decide a apelação", s == 200, (s, r))
 s, r = req("GET", "/denuncia/me", B["token"])
 chk("minhas denúncias", s == 200 and any(x["idDenuncia"] == d["idDenuncia"] for x in r), s)
 
+# ====================================================================== demais endpoints
+secao("Demais endpoints (leitura, edição e exclusão)")
+leituras = [
+    "/area", f"/area/{req('GET', '/area', A['token'])[1][0]['idArea']}", "/comentario", "/contra-proposta", f"/contra-proposta/{c1['idContraProposta']}",
+    f"/contra-proposta/projeto/{pid}", "/contrato", "/endereco", f"/especialidade/{id_esp}", "/perfil-usuario", f"/perfil-usuario/{pa}",
+    f"/postagem/{poid}", f"/projeto-usuario/usuario/{A['id']}", f"/projeto-usuario/{vinc[0]['idProjetoUsuario']}", f"/projeto/visualizar/{C['id']}",
+    "/proposta", f"/risco-projeto/{riscos[0]['idRiscoProjeto']}" if riscos else "/risco-projeto", "/solicitacao-vinculo/minhas-solicitacoes",
+    f"/solicitacao-vinculo/projeto/{pid}", f"/solicitacao-vinculo/projeto/{pid}/pendentes", "/sub-comentario", "/subarea", "/termo",
+    f"/termo/{termo['idTermo']}", "/termo-postagem", "/termo-vinculo", f"/termo-vinculo/projeto/{pid}", f"/termo-vinculo/{t1['idTermoVinculo']}",
+    f"/tipo-projeto/{tipos[0]['idTipoProjeto']}", f"/conexao/seguidores/{A['id']}", f"/conexao/seguindo/{C['id']}",
+    f"/conexao/solicitacoes/enviadas/{C['id']}", f"/conexao/solicitacoes/pendentes/{A['id']}", f"/conexao/contar-seguindo/{C['id']}",
+    f"/conexao/contar-solicitacoes-pendentes/{A['id']}", f"/curtida/contar-curtidas/1/{poid}", f"/curtida/status/{B['id']}/1/{poid}",
+]
+falhas_leitura = []
+for caminho in leituras:
+    s, r = req("GET", caminho, A["token"] if "/solicitacoes/pendentes" in caminho or "contar-solicitacoes" in caminho else C["token"] if "/conexao/" in caminho else adm if caminho == "/endereco" else A["token"])
+    if s != 200:
+        falhas_leitura.append((caminho, s, str(r)[:120]))
+chk(f"{len(leituras)} endpoints de leitura respondem 200", not falhas_leitura, falhas_leitura)
+s, sb = req("GET", "/subarea", A["token"])
+if sb:
+    s, r = req("GET", f"/subarea/{sb[0]['idSubArea']}", A["token"])
+    chk("subárea por id", s == 200, (s, r))
+s, cm = req("GET", "/sub-comentario", A["token"])
+
+# edição/exclusão de contrato pendente, termo, termo de vínculo e contraproposta
+s, p4 = req("POST", "/proposta", C["token"], {"descricaoProposta": "Para contrato editável", "valorProposta": 300, "projetoId": pid})
+s, ct2 = req("POST", "/contrato", A["token"], contrato(p4["idProposta"], pid))
+s, r = req("PUT", f"/contrato/{ct2['idContrato']}", A["token"], {**contrato(p4["idProposta"], pid), "tituloContrato": "Aporte (revisado)"})
+chk("criador edita contrato pendente", s == 200 and r["tituloContrato"] == "Aporte (revisado)", (s, r))
+s, r = req("PUT", f"/contrato/{ct['idContrato']}", A["token"], contrato(prid, pid))
+chk("editar contrato já aceito -> 400", s == 400, (s, r))
+s, r = req("DELETE", f"/contrato/{ct2['idContrato']}", B["token"])
+chk("excluir contrato de projeto alheio -> 403", s == 403, (s, r))
+s, r = req("DELETE", f"/contrato/{ct2['idContrato']}", A["token"])
+chk("criador exclui contrato pendente", s == 204, (s, r))
+s, r = req("PUT", f"/termo/{termo['idTermo']}", adm, {"tituloTermo": "Cláusula 1 (rev)", "descricaoTermo": "Prazo de 30 dias", "contratoId": ct["idContrato"]})
+chk("admin edita termo do contrato", s == 200, (s, r))
+s, r = req("DELETE", f"/termo/{termo['idTermo']}", adm)
+chk("admin exclui termo do contrato", s == 204, (s, r))
+s, r = req("PUT", f"/termo-vinculo/{t1['idTermoVinculo']}", B["token"], {"tituloTermoVinculo": "x", "descricaoTermoVinculo": "y"})
+chk("editar termo de vínculo alheio -> 403", s == 403, (s, r))
+s, r = req("PUT", f"/termo-vinculo/{t1['idTermoVinculo']}", A["token"], {"tituloTermoVinculo": "Confidencialidade", "descricaoTermoVinculo": "Não divulgar dados", "obrigatorio": True})
+chk("criador edita termo de vínculo", s == 200, (s, r))
+s, t2 = req("POST", f"/termo-vinculo/projeto/{pid}", A["token"], {"tituloTermoVinculo": "Temporário", "descricaoTermoVinculo": "x"})
+s, r = req("DELETE", f"/termo-vinculo/{t2['idTermoVinculo']}", A["token"])
+chk("criador exclui termo de vínculo", s == 204, (s, r))
+s, p6 = req("POST", "/proposta", A["token"], {"descricaoProposta": "Proposta da Ana ao projeto do Bruno", "valorProposta": 700, "projetoId": proj2["idProjeto"]})
+s, c3 = req("POST", "/contra-proposta", B["token"], {"descricaoContraProposta": "Topo 900", "valorContraProposta": 900, "idProposta": p6["idProposta"]})
+s, r = req("DELETE", f"/contra-proposta/{c3['idContraProposta']}", A["token"])
+chk("excluir contraproposta de outra pessoa -> 400", s == 400, (s, r))
+s, r = req("DELETE", f"/contra-proposta/{c3['idContraProposta']}", B["token"])
+chk("quem criou retira a contraproposta", s == 204, (s, r))
+
+# resposta, conexões e notificações
+s, com2 = req("POST", "/comentario", C["token"], {"textoComentario": "Outro comentário", "postagemId": poid, "usuarioId": C["id"]})
+s, sub2 = req("POST", "/sub-comentario", A["token"], {"textoSubComentario": "Resposta", "comentarioId": com2["idComentario"], "usuarioId": A["id"]})
+s, r = req("PUT", f"/sub-comentario/{sub2['idSubComentario']}", A["token"], {"textoSubComentario": "Resposta editada", "comentarioId": com2["idComentario"], "usuarioId": A["id"]})
+chk("editar a própria resposta", s == 200 and r["textoSubComentario"] == "Resposta editada", (s, r))
+s, r = req("GET", f"/sub-comentario/{sub2['idSubComentario']}", B["token"])
+s2, r2 = req("GET", f"/comentario/{com2['idComentario']}", B["token"])
+chk("resposta e comentário por id", s == 200 and s2 == 200, (s, s2))
+s, cx2 = req("POST", "/conexao/solicitar", B["token"], {"seguidoId": C["id"]})
+chk("pedir conexão (corpo JSON)", s in (200, 201), (s, cx2))
+s, r = req("PUT", f"/conexao/{cx2['idConexao']}/recusar", C["token"])
+chk("recusar pedido de conexão", s == 200 and r.get("status") == "RECUSADO", (s, r))
+s, n = req("GET", "/conexao/notificacoes?page=0&size=5", B["token"])
+itens_n = n.get("content", []) if isinstance(n, dict) else n
+if itens_n:
+    s, r = req("PUT", f"/conexao/notificacoes/{itens_n[0]['idNotificacao']}/ler", B["token"])
+    chk("marcar uma notificação como lida", s in (200, 204), (s, r))
+s, r = req("PUT", f"/solicitacao-vinculo/{sv['idSolicitacaoVinculo']}/rejeitar", A["token"])
+chk("solicitação já decidida não pode ser rejeitada -> 400", s == 400, (s, r))
+s, termos2 = req("GET", f"/termo-vinculo/projeto/{proj2['idProjeto']}", C["token"])
+qs = "&".join(f"termoIds={t['idTermoVinculo']}" for t in termos2) or "termoIds="
+req("POST", f"/termo-vinculo/projeto/{proj2['idProjeto']}/aceitar?{qs}", C["token"])
+s, sv2 = req("POST", f"/solicitacao-vinculo/projeto/{proj2['idProjeto']}", C["token"], {"tipoVinculoDesejadoId": 2})
+chk("pedir participação após aceitar os termos", s in (200, 201), (s, sv2))
+s, r = req("PUT", f"/solicitacao-vinculo/{sv2['idSolicitacaoVinculo']}/rejeitar", B["token"])
+chk("criador rejeita solicitação", s == 200, (s, r))
+
+# curtida por id, mídias e exclusões
+s, id_curtida = req("POST", f"/curtida/{C['id']}/4/{pid}", C["token"])
+s, r = req("DELETE", f"/curtida/remover-curtida/{id_curtida}", B["token"])
+chk("remover curtida de outra pessoa pelo id -> 403", s == 403, (s, r))
+s, r = req("DELETE", f"/curtida/remover-curtida/{id_curtida}", C["token"])
+chk("remover a própria curtida pelo id", s in (200, 204), (s, r))
+for caminho, quem in ((f"/perfil-usuario/{pa}/banner", A), (f"/perfil-usuario/{pa}/video", A), (f"/postagem/{poid}/imagens", A),
+                      (f"/postagem/{poid}/videos", A), (f"/projeto/{pid}/imagens", A), (f"/projeto/{pid}/videos", A), (f"/usuario/{A['id']}/foto", A)):
+    s, r = req("DELETE", caminho, quem["token"])
+    chk(f"remover mídia: DELETE {caminho.split('/', 3)[1]}/…/{caminho.rsplit('/', 1)[1]}", s == 204, (s, r))
+s, r = req("DELETE", f"/postagem/{poid}", B["token"])
+chk("excluir publicação de outra pessoa -> 403", s == 403, (s, r))
+s, r = req("DELETE", f"/comentario/{com2['idComentario']}", C["token"])
+s, r = req("DELETE", f"/postagem/{poid}", A["token"])
+chk("excluir a própria publicação (sem comentários) -> 204", s == 204, (s, r))
+s, r = req("DELETE", f"/endereco/{end['idEndereco']}", B["token"])
+chk("excluir endereço de outra pessoa -> 403", s == 403, (s, r))
+s, r = req("DELETE", f"/endereco/{end['idEndereco']}", A["token"])
+chk("excluir o próprio endereço", s == 204, (s, r))
+s, r = req("POST", f"/usuario/alterar-role/{C['id']}/2", adm)
+chk("admin adiciona o papel EMPRESA", s == 200 and "EMPRESA" in r.get("roles", []), (s, r))
+s, sub3 = req("POST", "/subarea", adm, {"nomeSubArea": f"Sub2 {sufixo}", "descricaoSubArea": "d", "idArea": req("GET", "/area", adm)[1][0]["idArea"]})
+s, r = req("PUT", f"/subarea/{sub3['idSubArea']}", adm, {"nomeSubArea": f"Sub2 {sufixo} (ed)", "descricaoSubArea": "d", "idArea": sub3.get("idArea") or req("GET", "/area", adm)[1][0]["idArea"]})
+chk("admin edita subárea", s == 200, (s, r))
+for path in ("/tipo-projeto", "/risco-projeto"):
+    if path in ids_cat:
+        s, r = req("DELETE", f"{path}/{ids_cat[path]}", adm)
+        chk(f"admin exclui em {path}", s == 204, (s, r))
+s, tmp = req("POST", "/usuario/cadastro-usuario", body={"nomeUsuario": "Conta Temporária", "emailUsuario": f"tmp.{sufixo}@teste.com", "senhaUsuario": SENHA})
+req("POST", f"/usuario/admin/analise-identidade/{tmp['idUsuario']}", adm, {"status": "APROVADA"})
+tok_tmp, _ = login(f"tmp.{sufixo}@teste.com", SENHA)
+s, pt = req("POST", "/perfil-usuario", tok_tmp, {"linkedin": "https://linkedin.com/in/tmp", "identificador": cpf_valido(424242), "idEspecialidade": id_esp, "idUsuario": tmp["idUsuario"]})
+s, r = req("DELETE", f"/perfil-usuario/{pt['idPerfilUsuario']}", A["token"])
+chk("excluir perfil de outra pessoa -> 403", s == 403, (s, r))
+s, r = req("DELETE", f"/perfil-usuario/{pt['idPerfilUsuario']}", tok_tmp)
+chk("excluir o próprio perfil", s == 204, (s, r))
+s, r = req("DELETE", f"/usuario/{tmp['idUsuario']}", A["token"])
+chk("excluir a conta de outra pessoa -> 403", s == 403, (s, r))
+s, r = req("DELETE", f"/usuario/{tmp['idUsuario']}", tok_tmp)
+chk("excluir a própria conta", s == 204, (s, r))
+s, r = req("DELETE", f"/usuario/{A['id']}", A["token"])
+chk("conta com projetos/publicações não é apagada em silêncio -> 400 com explicação", s == 400 and ("projetos" in str(r) or "conteúdo" in str(r)), (s, r))
+s, r = req("DELETE", f"/usuario/{C['id']}", C["token"])
+chk("conta com comentários/propostas -> 400 com explicação (sem apagar nada pela metade)", s == 400 and req("GET", f"/usuario/{C['id']}", adm)[0] == 200, (s, r))
+
 # ====================================================================== conta desativada
 secao("Sessão e conta desativada")
 s, r = req("PUT", f"/usuario/ativar-desativar/{C['id']}", B["token"])
@@ -597,6 +738,17 @@ nt = [r for r in resultados if r[2] == "NÃO TESTADO"]
 print(f"{aprov}/{total - len(nt)} verificações aprovadas · {len(reprov)} reprovadas · {len(nt)} não testadas")
 for r in reprov:
     print(f"  REPROVADO [{r[0]}] {r[1]}: {r[3]}")
+# cobertura: cada endpoint do backend (lista em ENDPOINTS_TXT) chamado ao menos uma vez
+lista_endpoints = os.environ.get("ENDPOINTS_TXT")
+if lista_endpoints and os.path.exists(lista_endpoints):
+    eps = [l.split(" ", 1) for l in open(lista_endpoints).read().splitlines() if l.strip()]
+    def casa(metodo, modelo):
+        rx = "^" + re.escape(re.sub(r"\{[^}]*\}", "§", modelo)).replace("§", "[^/]+") + "$"
+        return any(m == metodo and re.match(rx, p) for m, p, _ in chamadas)
+    nao_chamados = [f"{m} {p}" for m, p in eps if not casa(m, p)]
+    print(f"Cobertura: {len(eps) - len(nao_chamados)}/{len(eps)} endpoints chamados")
+    for e in nao_chamados:
+        print("  não chamado:", e)
 saida = os.environ.get("RESULTADO_JSON")
 if saida:
     json.dump([dict(zip(("secao", "nome", "status", "detalhe"), r)) for r in resultados], open(saida, "w"), ensure_ascii=False, indent=1)

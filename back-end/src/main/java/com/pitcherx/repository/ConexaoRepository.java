@@ -1,5 +1,6 @@
 package com.pitcherx.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
 import com.pitcherx.model.Conexao;
 import com.pitcherx.model.StatusConexao;
 import org.springframework.data.domain.Page;
@@ -32,4 +33,9 @@ public interface ConexaoRepository extends JpaRepository<Conexao, Long> {
     Page<Conexao> findBySeguidorIdAndStatusCustom(@Param("usuarioId") Long usuarioId,
                                                    @Param("status") StatusConexao status,
                                                    Pageable pageable);
+
+    /** Usado na exclusão de conta (as duas direções). */
+    @Modifying
+    @Query("DELETE FROM Conexao c WHERE c.seguidor.idUsuario = :usuarioId OR c.seguido.idUsuario = :usuarioId")
+    int apagarDoUsuario(@Param("usuarioId") Long usuarioId);
 }

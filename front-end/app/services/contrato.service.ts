@@ -26,7 +26,7 @@ export function atualizarContrato(id: number, data: ContratoRequest) {
 
 /**
  * PUT /contrato/{id}/aceitar — PENDENTE → ACEITE; soma o valor da proposta ao arrecadado.
- * O backend libera ADMIN e USUARIO (cita "EMPRESARIO", role que não existe).
+ * Só o autor da proposta formalizada (ou o ADMIN) pode aceitar.
  */
 export function aceitarContrato(id: number) {
   return api<Contrato>(`/contrato/${id}/aceitar`, { method: "PUT" });

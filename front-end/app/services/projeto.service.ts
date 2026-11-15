@@ -22,10 +22,10 @@ export async function listarProjetos() {
 }
 
 /**
- * GET /projeto/{id} está declarado com `@PreAuthorize("authenticated()")`, expressão que o
- * Spring não reconhece (o correto seria `isAuthenticated()`): o servidor responde 400 para
- * qualquer pessoa. O projeto é localizado na listagem GET /projeto, que devolve os mesmos
- * campos; a regra de acesso (aceite dos termos de vínculo) é aplicada pela página do projeto.
+ * Detalhes do projeto a partir da listagem GET /projeto. O GET /projeto/{id} exige que a pessoa já
+ * tenha aceitado os termos de vínculo (403 caso contrário), mas a página do projeto precisa do nome
+ * e da capa justamente para exibir o portão de aceite; por isso usa a listagem, que traz os mesmos
+ * campos. A regra de acesso continua aplicada pela página e pelo backend.
  */
 export async function buscarProjeto(id: number) {
   const encontrado = (await listarProjetos()).find((p) => p.idProjeto === id);

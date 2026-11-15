@@ -80,6 +80,18 @@ public class UsuarioService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.pitcherx.security.Permissoes permissoes;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pitcherx.repository.ConexaoRepository conexaoRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pitcherx.repository.CurtidaRepository curtidaRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pitcherx.repository.SenhaResetTokenRepository senhaResetTokenRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pitcherx.repository.ProjetoInteracaoRepository projetoInteracaoRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pitcherx.repository.EnderecoRepository enderecoRepository;
+
+
     /**
      * Dados pessoais (telefone, comprovante de identidade e tentativas) só para o próprio
      * usuário e o administrador. Antes, GET /usuario os expunha para qualquer conta.
@@ -194,16 +206,33 @@ public class UsuarioService {
     public void deletarUsuario(Long idUsuario) {
         Usuario usuario = usuarioRepository.findById(idUsuario)
                 .orElseThrow(() -> new EntityNotFoundException("Sem usuário com o ID informado!"));
+        if (projetoRepository.countByUsuarioCriadorId(idUsuario) > 0) {
+            throw new BusinessException("Esta conta ainda é criadora de projetos. Exclua os projetos antes de excluir a conta.", "CONTA_COM_PROJETOS");
+        }
+        // Registros pessoais que só existem por causa da conta. Antes, a notificação de
+        // "identidade aprovada" (que toda conta ativa recebe) impedia a exclusão: o erro só
+        // surgia no commit e virava 500.
+        notificacaoRepository.apagarDoUsuario(idUsuario);
+        conexaoRepository.apagarDoUsuario(idUsuario);
+        curtidaRepository.apagarDoUsuario(idUsuario);
+        senhaResetTokenRepository.apagarDoUsuario(idUsuario);
+        projetoInteracaoRepository.apagarDoUsuario(idUsuario);
+        enderecoRepository.apagarDoUsuario(idUsuario);
+        // O perfil profissional sai junto (cascade ALL em Usuario.perfilUsuario).
         try {
             usuarioRepository.delete(usuario);
+            // Força o DELETE agora para que uma violação de chave estrangeira caia no catch.
+            usuarioRepository.flush();
             uploadUtil.limparAposTransacaoImagens(
                     usuario.getUrlImagemUsuario() == null ? List.of() : List.of(usuario.getUrlImagemUsuario()),
                     List.of());
             uploadUtil.limparAposTransacaoVideos(
                     usuario.getUrlVideoUsuario() == null ? List.of() : List.of(usuario.getUrlVideoUsuario()),
                     List.of());
-        } catch (DataIntegrityViolationException e) {
-            throw new IllegalStateException("Não é possível deletar o usuário, pois ele está associada a outras entidades.!");
+        } catch (org.springframework.dao.DataAccessException e) {
+            // Conteúdo de negócio (publicações, comentários, projetos, propostas, contratos...)
+            // não é apagado em silêncio: a pessoa precisa removê-lo antes.
+            throw new BusinessException("Esta conta ainda tem publicações, comentários, projetos ou propostas. Exclua esse conteúdo antes de excluir a conta.", "CONTA_COM_CONTEUDO");
         }
     }
 

@@ -591,6 +591,10 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
                 {dados.erro}
               </Alerta>
             ) : (
+              <>
+              {perfil?.biografia?.trim() && (
+                <p className="mt-3 whitespace-pre-line break-words text-[14px] leading-6 text-ink-700">{perfil.biografia.trim()}</p>
+              )}
               <dl className="mt-4 space-y-4 text-[14px]">
                 <ItemSobre icone={Briefcase} rotulo="Área de atuação">
                   {titulo ?? <Vazio proprio={proprio && !logadoAdmin} texto="Não informada" />}
@@ -626,6 +630,7 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
                   </ItemSobre>
                 )}
               </dl>
+              </>
             )}
 
             {!dados.carregando && !dados.erro && !perfil && !proprio && (

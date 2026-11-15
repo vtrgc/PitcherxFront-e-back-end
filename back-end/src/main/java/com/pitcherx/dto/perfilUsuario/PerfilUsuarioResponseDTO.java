@@ -10,7 +10,8 @@ public record PerfilUsuarioResponseDTO(
 		String urlBanner,
 		String urlVideoPerfil,
 		Especialidade especialidade,
-		UsuarioSimples usuario
+		UsuarioSimples usuario,
+		String biografia
 		) {
 
 }

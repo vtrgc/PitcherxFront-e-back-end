@@ -156,14 +156,14 @@ describe("lib/api", () => {
 });
 
 describe("contratos dos serviços com o backend", () => {
-  it("GET /usuario/{id} envia também ?id= (o controller não usa @PathVariable)", async () => {
+  it("GET /usuario/{id} usa o id no caminho (o backend agora tem @PathVariable)", async () => {
     const fetchMock = vi.fn().mockResolvedValue(respostaJson(200, { idUsuario: 5 }));
     vi.stubGlobal("fetch", fetchMock);
     const { buscarUsuario } = await import("../app/services/usuario.service");
     await buscarUsuario(5);
     await buscarUsuario(5); // cache
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe("/backend/usuario/5?id=5");
+    expect(fetchMock.mock.calls[0][0]).toBe("/backend/usuario/5");
   });
 
   it("redefinir senha usa PUT", async () => {

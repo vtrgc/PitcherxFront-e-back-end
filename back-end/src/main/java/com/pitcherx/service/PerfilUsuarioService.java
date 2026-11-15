@@ -86,9 +86,12 @@ public class PerfilUsuarioService {
 		// Capa e vídeo têm endpoints próprios: um PUT sem eles não pode apagá-los.
 		String bannerAtual = perfilUsuario.getUrlBanner();
 		String videoAtual = perfilUsuario.getUrlVideoPerfil();
+		String bioAtual = perfilUsuario.getBiografia();
 		perfilUsuarioMapper.updateFromDTO(perfilUsuarioRequestDTO, perfilUsuario);
 		if (perfilUsuarioRequestDTO.urlBanner() == null) perfilUsuario.setUrlBanner(bannerAtual);
 		if (perfilUsuarioRequestDTO.urlVideoPerfil() == null) perfilUsuario.setUrlVideoPerfil(videoAtual);
+		// Clientes que não enviam a biografia (versões antigas do front) não a apagam.
+		if (perfilUsuarioRequestDTO.biografia() == null) perfilUsuario.setBiografia(bioAtual);
 		perfilUsuario.setEspecialidade(especialidade);
 		
 		PerfilUsuario salvo = perfilUsuarioRepository.save(perfilUsuario);

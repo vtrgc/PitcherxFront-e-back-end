@@ -8,7 +8,6 @@ import {
   Briefcase,
   Camera,
   ChevronRight,
-  Info,
   Loader2,
   MapPin,
   RotateCcw,
@@ -23,6 +22,7 @@ import { cls } from "../../components/ui/estilos";
 import { useFeedback } from "../../components/ui/FeedbackProvider";
 import CampoFotoPerfil from "../../components/perfil/CampoFotoPerfil";
 import VideoPerfil from "../../components/perfil/VideoPerfil";
+import DadosConta from "../../components/perfil/DadosConta";
 import CamposProfissional from "../../components/perfil/CamposProfissional";
 import CamposEndereco from "../../components/perfil/CamposEndereco";
 import { useAuth, AuthUser } from "../../context/AuthContext";
@@ -355,19 +355,8 @@ function FormularioPerfil({
         </Secao>
 
         {/* -------------------------------------------------------- básicas */}
-        <Secao id="basicas" titulo="Informações básicas">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <CampoLeitura id="basica-nome" rotulo="Nome" valor={usuario.nomeUsuario} className="sm:col-span-2" />
-            <CampoLeitura id="basica-email" rotulo="E-mail" valor={usuario.emailUsuario} />
-            <CampoLeitura id="basica-telefone" rotulo="Telefone" valor={usuario.telefoneUsuario || ""} placeholder="Não informado" />
-          </div>
-          <p className="mt-4 flex items-start gap-2 rounded-xl bg-ink-25 px-3.5 py-3 text-[13px] leading-5 text-ink-600">
-            <Info size={16} className="mt-0.5 shrink-0 text-brand-600" aria-hidden="true" />
-            <span>
-              Por uma limitação temporária do servidor, nome, e-mail e telefone ainda não podem ser alterados por aqui. As
-              demais informações desta página são salvas normalmente.
-            </span>
-          </p>
+        <Secao id="basicas" titulo="Dados da conta" descricao="Nome, e-mail e telefone. Para salvar, confirme com a sua senha atual.">
+          <DadosConta usuario={usuario} />
         </Secao>
 
         {/* --------------------------------------------------- profissional */}
@@ -496,28 +485,5 @@ function Secao({
       </div>
       {children}
     </section>
-  );
-}
-
-function CampoLeitura({
-  id,
-  rotulo,
-  valor,
-  placeholder,
-  className = "",
-}: {
-  id: string;
-  rotulo: string;
-  valor: string;
-  placeholder?: string;
-  className?: string;
-}) {
-  return (
-    <div className={className}>
-      <label htmlFor={id} className={cls.label}>
-        {rotulo}
-      </label>
-      <input id={id} value={valor} placeholder={placeholder} readOnly disabled className={cls.input} />
-    </div>
   );
 }

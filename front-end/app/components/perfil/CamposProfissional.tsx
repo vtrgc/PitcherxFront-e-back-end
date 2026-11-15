@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 import { mensagemErro } from "../../lib/api";
 import { formatarDocumento } from "../../lib/validacao";
-import { CamposProfissionalValor, ErrosProfissional, LINKEDIN_MAX } from "../../lib/perfil";
+import { BIOGRAFIA_MAX, CamposProfissionalValor, ErrosProfissional, LINKEDIN_MAX } from "../../lib/perfil";
 import { listarEspecialidades } from "../../services/perfilUsuario.service";
 import { Especialidade } from "../../types/PerfilUsuario";
 import { cls } from "../ui/estilos";
@@ -144,6 +144,28 @@ export default function CamposProfissional({
         {erroDe("identificador") ?? (
           <p id={id("identificador-ajuda")} className="mt-1 inline-flex items-center gap-1 text-[12.5px] text-ink-400">
             <Lock size={12} aria-hidden="true" /> Não aparece no seu perfil.
+          </p>
+        )}
+      </div>
+
+      <div className="sm:col-span-2">
+        <label htmlFor={id("biografia")} className={cls.label}>
+          Sobre você <span className="font-normal text-ink-400">(opcional)</span>
+        </label>
+        <textarea
+          id={id("biografia")}
+          value={valor.biografia}
+          maxLength={BIOGRAFIA_MAX}
+          rows={4}
+          disabled={desabilitado}
+          onChange={(e) => set("biografia", e.target.value)}
+          placeholder="Conte sua experiência, o que você procura e no que pode ajudar."
+          aria-invalid={!!erros.biografia}
+          className={`${cls.input} resize-y`}
+        />
+        {erroDe("biografia") ?? (
+          <p className="mt-1 text-right text-[12px] text-ink-400">
+            {valor.biografia.length}/{BIOGRAFIA_MAX}
           </p>
         )}
       </div>

@@ -216,19 +216,12 @@ export default function PropostaDetalhePage() {
     try {
       const r = await aceitarContraProposta(cp.idContraProposta);
       setContras((l) => l.map((c) => (c.idContraProposta === cp.idContraProposta ? { ...c, ...r } : c)));
-      // O backend soma ao arrecadado o valor da PROPOSTA quando ela é aceita: alinhamos o valor
-      // da proposta ao que foi acordado (só o autor pode editar, e não há mais nada pendente).
-      if (cp.valorContraProposta != null && cp.valorContraProposta !== proposta.valorProposta) {
-        try {
-          const atualizada = await atualizarProposta(
-            proposta.idProposta,
-            { descricaoProposta: proposta.descricaoProposta, valorProposta: cp.valorContraProposta, projetoId: proposta.projetoId ?? null },
-            proposta.autor ?? (usuario ? { id: usuario.idUsuario, nome: usuario.nomeUsuario } : null)
-          );
-          setProposta({ ...proposta, ...atualizada, valorProposta: cp.valorContraProposta });
-        } catch (e) {
-          notificar(`Contraproposta aceita, mas o valor da proposta não foi atualizado: ${mensagemErro(e, "tente editar a proposta.")}`);
-        }
+      // Ao aceitar, o backend passa a proposta para o valor acordado (é ele que entra no
+      // arrecadado no aceite final). Relemos a proposta para mostrar o valor atualizado.
+      try {
+        setProposta(await buscarProposta(proposta.idProposta));
+      } catch {
+        if (cp.valorContraProposta != null) setProposta({ ...proposta, valorProposta: cp.valorContraProposta });
       }
       notificar("Contraproposta aceita. Agora falta o aceite final do criador do projeto.", "sucesso");
     } catch (error) {
@@ -499,7 +492,7 @@ export default function PropostaDetalhePage() {
                     rodape={
                       cp.dataDecisao
                         ? `${st === "ACEITA" ? "Aceita" : "Rejeitada"} em ${formatarDataHora(cp.dataDecisao)}${
-                            st === "REJEITADA" ? " — a justificativa foi enviada por notificação ao criador do projeto" : ""
+                            cp.justificativaDecisao ? ` — “${cp.justificativaDecisao}”` : ""
                           }`
                         : undefined
                     }

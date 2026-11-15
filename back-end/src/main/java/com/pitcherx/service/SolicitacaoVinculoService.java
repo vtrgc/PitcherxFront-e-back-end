@@ -149,12 +149,15 @@ public class SolicitacaoVinculoService {
         // Enviar email para o criador do projeto
         try {
             enviarEmailSolicitacaoParaCriador(salvo, solicitante);
-        } catch (MailException e) {
-            throw new RuntimeException("Falha ao enviar email de solicitação de vínculo", e);
+        } catch (RuntimeException e) {
+            // Falha de SMTP não desfaz a solicitação (o criador também a vê na plataforma).
+            LOG_EMAIL.error("Falha ao enviar e-mail de solicitação de vínculo: {}", e.getMessage());
         }
 
         return solicitacaoVinculoMapper.toDTO(salvo);
     }
+
+    private static final org.slf4j.Logger LOG_EMAIL = org.slf4j.LoggerFactory.getLogger(SolicitacaoVinculoService.class);
 
     @Transactional
     public SolicitacaoVinculoResponseDTO aprovarSolicitacao(Long idSolicitacao, Long usuarioIdCriador) {
@@ -166,6 +169,9 @@ public class SolicitacaoVinculoService {
         Usuario criador = getProjetoCriador(projeto.getIdProjeto());
         if (criador == null || !criador.getIdUsuario().equals(usuarioIdCriador)) {
             throw new SecurityException("Apenas o criador do projeto pode aprovar solicitações.");
+        }
+        if (!"PENDENTE".equals(solicitacao.getStatus())) {
+            throw new IllegalArgumentException("Esta solicitação já foi respondida.");
         }
 
         // Atualizar status para ACEITE
@@ -244,7 +250,7 @@ public class SolicitacaoVinculoService {
             mailSender.send(mimeMessage);
 
         } catch (Exception e) {
-            throw new RuntimeException("Falha ao enviar email de aprovação", e);
+            LOG_EMAIL.error("Falha ao enviar e-mail de aprovação de vínculo: {}", e.getMessage());
         }
 
         return solicitacaoVinculoMapper.toDTO(solicitacao);
@@ -261,16 +267,21 @@ public class SolicitacaoVinculoService {
         if (criador == null || !criador.getIdUsuario().equals(usuarioIdCriador)) {
             throw new SecurityException("Apenas o criador do projeto pode rejeitar solicitações.");
         }
+        // Antes uma solicitação já ACEITA podia ser "rejeitada": o status mudava, mas o vínculo
+        // criado na aprovação continuava existindo.
+        if (!"PENDENTE".equals(solicitacao.getStatus())) {
+            throw new IllegalArgumentException("Esta solicitação já foi respondida.");
+        }
 
         solicitacao.setStatus("RECUSADA");
         solicitacao.setDataResposta(LocalDate.now().atStartOfDay());
         solicitacaoVinculoRepository.save(solicitacao);
 
-        // Enviar email de notificação para o solicitante
+        // Avisa o solicitante da RECUSA (antes era enviado o e-mail de aprovação).
         try {
-            enviarEmailAprovacaoParaSolicitante(solicitacao);
-        } catch (MailException e) {
-            throw new RuntimeException("Falha ao enviar email de aprovação", e);
+            enviarEmailRejeicaoParaSolicitante(solicitacao);
+        } catch (RuntimeException e) {
+            LOG_EMAIL.error("Falha ao enviar e-mail de recusa de vínculo: {}", e.getMessage());
         }
 
         return solicitacaoVinculoMapper.toDTO(solicitacao);
