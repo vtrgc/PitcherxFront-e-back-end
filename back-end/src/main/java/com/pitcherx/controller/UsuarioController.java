@@ -69,6 +69,14 @@ import java.util.List;
             return ResponseEntity.status(HttpStatus.OK).body(usuarioResponseDTO);
         }
 
+        @PostMapping("/reenviar-codigo-verificacao")
+        @PreAuthorize("isAuthenticated()")
+        @Operation(description = "Gera e envia por e-mail um novo código de verificação para a conta logada (ainda não verificada).")
+        public ResponseEntity<Void> reenviarCodigoVerificacao() {
+            usuarioService.reenviarCodigoVerificacao();
+            return ResponseEntity.noContent().build();
+        }
+
         /* ========================================================================
            NOVO: Comprovante de identidade
            ======================================================================== */

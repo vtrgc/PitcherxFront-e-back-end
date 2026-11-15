@@ -34,6 +34,11 @@ export interface AuthUser {
   urlImagemUsuario?: string | null;
   isActive: boolean;
   roles: string[];
+  /**
+   * Vem do login. false = falta digitar o código de verificação do e-mail (pedido no primeiro
+   * acesso). undefined = sessão antiga, sem essa informação (não bloqueia nada).
+   */
+  verificado?: boolean;
 }
 
 /**
@@ -67,6 +72,7 @@ function mapLoginResponseToUser(response: LoginResponse): AuthUser {
     emailUsuario: response.emailUsuario,
     urlImagemUsuario: null,
     isActive: response.isActive ?? response.active ?? true,
+    verificado: typeof response.verificado === "boolean" ? response.verificado : undefined,
     roles: (response.roles ?? [])
       .map((r) => (typeof r === "string" ? r : r?.nomeRole))
       .filter((r): r is string => !!r),

@@ -6,6 +6,7 @@ import { Award, FileCheck2, Loader2, Upload } from "lucide-react";
 import Alerta from "../ui/Alerta";
 import { cls } from "../ui/estilos";
 import { useFeedback } from "../ui/FeedbackProvider";
+import { useAuth } from "../../context/AuthContext";
 import { mensagemErro } from "../../lib/api";
 import { ACCEPT_FOTO } from "../../lib/imagemPerfil";
 import { validarArquivosGaleria } from "../../lib/galeria";
@@ -31,6 +32,7 @@ const ESTILO_STATUS: Record<string, string> = {
  */
 export default function CartaoIdentidade({ idUsuario }: { idUsuario: number }) {
   const { notificar } = useFeedback();
+  const { usuario: usuarioLogado } = useAuth();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dados, setDados] = useState<Usuario | null>(null);
@@ -105,9 +107,11 @@ export default function CartaoIdentidade({ idUsuario }: { idUsuario: number }) {
             ? "Comprovante recebido e aguardando análise."
             : "Envie uma foto legível de um documento com foto (RG, CNH ou cartão CNPJ). Formatos JPG, PNG ou WEBP, até 10 MB."}
         </p>
-        <Link href="/auth/verificar-conta?redirect=%2Fconfiguracoes" className="mt-1 mr-3 inline-block text-[12.5px] font-semibold text-brand-700 hover:underline">
-          Confirmar código do e-mail
-        </Link>
+        {usuarioLogado?.verificado !== true && (
+          <Link href="/auth/verificar-conta?redirect=%2Fconfiguracoes" className="mt-1 mr-3 inline-block text-[12.5px] font-semibold text-brand-700 hover:underline">
+            Confirmar código do e-mail
+          </Link>
+        )}
         {comprovante && (
           <a href={comprovante} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-[12.5px] font-semibold text-brand-700 hover:underline">
             Ver comprovante enviado

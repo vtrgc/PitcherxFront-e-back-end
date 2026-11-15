@@ -40,7 +40,7 @@ function LoginConteudo() {
   // Quem já está logado não precisa ver a tela de login.
   useEffect(() => {
     if (!isLoading && isAuthenticated && !loading) {
-      if (usuarioLogado && !usuarioLogado.isActive) router.replace("/auth/verificar-conta");
+      if (usuarioLogado && (!usuarioLogado.isActive || usuarioLogado.verificado === false)) router.replace("/auth/verificar-conta");
       else router.replace(isAdmin ? "/admin" : destino || "/feed");
     }
   }, [isLoading, isAuthenticated, isAdmin, destino, router, loading, usuarioLogado]);
@@ -64,6 +64,14 @@ function LoginConteudo() {
         // token, então a sessão continua aberta e a tela de verificação trata os dois casos.
         const query = destino ? `?redirect=${encodeURIComponent(destino)}` : "";
         router.replace(`/auth/verificar-conta${query}`);
+        return;
+      }
+
+      if (usuario.verificado === false) {
+        // Primeiro acesso: o backend pede o código de verificação enviado no cadastro.
+        const params = new URLSearchParams({ novo: "1" });
+        if (destino) params.set("redirect", destino);
+        router.replace(`/auth/verificar-conta?${params.toString()}`);
         return;
       }
 

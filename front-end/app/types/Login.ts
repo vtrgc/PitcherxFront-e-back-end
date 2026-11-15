@@ -22,4 +22,6 @@ export interface LoginResponse {
   active?: boolean;
   token: string;
   roles: LoginRole[];
+  /** false enquanto o código de verificação enviado no cadastro não foi digitado. */
+  verificado?: boolean;
 }

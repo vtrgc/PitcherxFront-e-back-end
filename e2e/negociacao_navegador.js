@@ -5,7 +5,21 @@
  *   ADMIN_EMAIL=... ADMIN_SENHA=... node e2e/negociacao_navegador.js
  */
 const { chromium, devices } = require('playwright');
+const fs = require('fs');
 const BASE = 'http://localhost:3000';
+const MAILS_LOG = process.env.MAILS_LOG;
+/** Último código de 6 dígitos enviado ao destinatário (SMTP de teste que grava em MAILS_LOG). */
+function codigoNoEmail(destinatario) {
+  if (!MAILS_LOG || !fs.existsSync(MAILS_LOG)) return null;
+  const msgs = fs.readFileSync(MAILS_LOG, 'utf8').split('\n=====\n').reverse();
+  for (const bruto of msgs) {
+    if (!bruto.toLowerCase().includes(destinatario.toLowerCase())) continue;
+    const texto = bruto.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
+    const achados = texto.match(/(?<!\d)\d{6}(?!\d)/g);
+    if (achados) return achados[achados.length - 1];
+  }
+  return null;
+}
 const res = []; const consoleErros = [];
 const ok = (n, c, x = '') => { res.push({ n, c: !!c }); console.log((c ? 'OK   ' : 'FAIL ') + n + (c ? '' : ' -> ' + String(x).slice(0, 300))); };
 const sufixo = Date.now().toString(36);
@@ -81,8 +95,19 @@ async function api(path, token, method = 'GET', body) {
   ok('login após aprovação (criador)', !cri.page.url().includes('/auth/login'), cri.page.url());
   const inv = await novaPagina(browser); await entrar(inv.page, contas.investidor.email, SENHA); await inv.page.waitForURL(u => !u.pathname.startsWith('/auth/login'), { timeout: 15000 }).catch(() => {});
   ok('login após aprovação (investidor)', !inv.page.url().includes('/auth/login'), inv.page.url());
-  // primeira tela após login pode ser verificar-conta: pula para o feed
-  for (const p of [cri.page, inv.page]) await p.goto(BASE + '/feed', { waitUntil: 'networkidle' });
+  // primeiro acesso: o backend pede o código enviado por e-mail no cadastro
+  for (const [p, conta] of [[cri.page, contas.criador], [inv.page, contas.investidor]]) {
+    await p.waitForURL(/\/auth\/verificar-conta/, { timeout: 10000 }).catch(() => {});
+    ok(`primeiro acesso pede o código do e-mail (${conta.nome})`, p.url().includes('/auth/verificar-conta'), p.url());
+    const cod = codigoNoEmail(conta.email);
+    if (cod) {
+      await p.getByLabel('Código de verificação').fill(cod);
+      await p.getByRole('button', { name: 'Verificar conta' }).click();
+      await p.waitForURL(u => !u.pathname.startsWith('/auth/verificar-conta'), { timeout: 15000 }).catch(() => {});
+    }
+    await p.goto(BASE + '/feed', { waitUntil: 'networkidle' });
+    ok(`código confirmado e plataforma liberada (${conta.nome})`, p.url().includes('/feed'), p.url());
+  }
   ok('autenticação persiste ao recarregar', !(await cri.page.reload().then(() => cri.page.url())).includes('/auth/login'));
 
   // ============================== PROJETOS

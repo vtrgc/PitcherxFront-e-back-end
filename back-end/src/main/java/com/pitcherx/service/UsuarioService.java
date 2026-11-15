@@ -186,13 +186,22 @@ public class UsuarioService {
         return usuarioMapper.toDTO(salvo);
     }
 
+    /**
+     * Confere o código da conta LOGADA. Antes a busca era pelo código no banco inteiro: qualquer
+     * pessoa logada confirmava a conta de outra se acertasse o código dela, e dois cadastros com
+     * o mesmo código (6 dígitos) faziam a busca devolver dois resultados e falhar.
+     */
     @Transactional
     public UsuarioResponseDTO verificarConta(String codigoVerificacao) {
-        Usuario usuario = usuarioRepository.findByCodigoVerificacao(codigoVerificacao)
-                .orElseThrow(() -> new IllegalArgumentException("Código de verificação inválido!"));
+        Usuario usuario = usuarioRepository.findById(permissoes.idUsuarioAtual())
+                .orElseThrow(() -> new EntityNotFoundException("Sem usuário com o ID informado!"));
 
         if (usuario.isVerificado()) {
             throw new IllegalArgumentException("Conta já foi verificada!");
+        }
+        String esperado = usuario.getCodigoVerificacao();
+        if (esperado == null || codigoVerificacao == null || !esperado.equals(codigoVerificacao.trim())) {
+            throw new IllegalArgumentException("Código de verificação inválido!");
         }
 
         usuario.setVerificado(true);
@@ -200,6 +209,25 @@ public class UsuarioService {
 
         Usuario salvo = usuarioRepository.save(usuario);
         return usuarioMapper.toDTO(salvo);
+    }
+
+    /** Gera um novo código para a conta logada (ainda não verificada) e o envia por e-mail. */
+    @Transactional
+    public void reenviarCodigoVerificacao() {
+        Usuario usuario = usuarioRepository.findById(permissoes.idUsuarioAtual())
+                .orElseThrow(() -> new EntityNotFoundException("Sem usuário com o ID informado!"));
+        if (usuario.isVerificado()) {
+            throw new IllegalArgumentException("Conta já foi verificada!");
+        }
+        String codigo = gerarCodigoVerificacao();
+        usuario.setCodigoVerificacao(codigo);
+        usuarioRepository.save(usuario);
+        try {
+            emailService.enviarCodigoVerificacao(usuario.getEmailUsuario(), usuario.getNomeUsuario(), codigo);
+        } catch (RuntimeException e) {
+            LOG_EMAIL.error("Falha ao reenviar o código de verificação: {}", e.getMessage());
+            throw new BusinessException("Não foi possível enviar o e-mail com o novo código agora. Tente novamente em alguns minutos.", "FALHA_ENVIO_EMAIL");
+        }
     }
 
     @Transactional
@@ -266,7 +294,8 @@ public class UsuarioService {
                 usuario.getEmailUsuario(),
                 usuario.getActive(),
                 token,
-                usuario.getRoles()
+                usuario.getRoles(),
+                usuario.isVerificado()
         );
     }
 

@@ -204,12 +204,40 @@ s, r = req("GET", "/projeto")
 chk("sem token -> 403", s == 403, s)
 
 A, B, C = usuarios["criador"], usuarios["investidor"], usuarios["terceiro"]
+s, r = req("POST", "/usuario/login", body={"emailUsuario": A["email"], "senhaUsuario": SENHA})
+chk("login informa que a conta ainda não foi verificada (verificado=false)", s == 200 and r.get("verificado") is False, (s, r))
+s, r = req("POST", "/usuario/login", body={"emailUsuario": ADMIN_EMAIL, "senhaUsuario": ADMIN_SENHA})
+chk("admin semeado conta como verificado (V46/DataInitializer)", s == 200 and r.get("verificado") is True, (s, r.get("verificado") if isinstance(r, dict) else r))
 codigo = codigo_no_email(A["email"])
-if codigo:
+codigo_b = codigo_no_email(B["email"])
+if codigo and codigo_b:
+    if codigo_b != codigo:
+        s, r = req("POST", "/usuario/verificar-conta", A["token"], {"codigoVerificacao": codigo_b})
+        chk("código de OUTRA conta não verifica a conta logada -> 400 (antes verificava a conta da outra pessoa)", s == 400, (s, r))
+    s, r = req("POST", "/usuario/verificar-conta", A["token"], {"codigoVerificacao": "000000" if codigo != "000000" else "111111"})
+    chk("código errado -> 400", s == 400 and "inválido" in str(r), (s, r))
     s, r = req("POST", "/usuario/verificar-conta", A["token"], {"codigoVerificacao": codigo})
     chk("verificar conta com o código do e-mail -> 200", s == 200, (s, r))
     s, r = req("POST", "/usuario/verificar-conta", A["token"], {"codigoVerificacao": codigo})
     chk("reusar o código -> 400", s == 400, (s, r))
+    s, r = req("POST", "/usuario/login", body={"emailUsuario": A["email"], "senhaUsuario": SENHA})
+    chk("depois de verificar, o login devolve verificado=true", s == 200 and r.get("verificado") is True, (s, r))
+
+    s, r = req("POST", "/usuario/reenviar-codigo-verificacao")
+    chk("reenviar código sem login -> 403", s == 403, s)
+    n_antes = qtd_emails()
+    s, r = req("POST", "/usuario/reenviar-codigo-verificacao", B["token"])
+    novo_b = codigo_no_email(B["email"], n_antes)
+    chk("reenviar código -> 204 e novo e-mail com outro código", s == 204 and novo_b is not None, (s, r, novo_b))
+    if novo_b and novo_b != codigo_b:
+        s, r = req("POST", "/usuario/verificar-conta", B["token"], {"codigoVerificacao": codigo_b})
+        chk("o código antigo deixa de valer depois do reenvio -> 400", s == 400, (s, r))
+    s, r = req("POST", "/usuario/verificar-conta", B["token"], {"codigoVerificacao": novo_b or ""})
+    chk("verificar com o código novo -> 200", s == 200, (s, r))
+    s, r = req("POST", "/usuario/reenviar-codigo-verificacao", B["token"])
+    chk("reenviar código para conta já verificada -> 400", s == 400 and "verificada" in str(r), (s, r))
+    s, r = req("POST", "/usuario/verificar-conta", C["token"], {"codigoVerificacao": codigo_no_email(C["email"]) or ""})
+    chk("terceira conta verificada", s == 200, (s, r))
 else:
     nao_testado("verificar conta pelo código", "sem log de e-mails (MAILS_LOG)")
 

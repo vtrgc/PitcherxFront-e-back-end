@@ -10,6 +10,8 @@ public record LoginResponseDTO(
         String emailUsuario,
         boolean isActive,
         String token,
-        Set<Role> roles
+        Set<Role> roles,
+        // false enquanto a pessoa não digitar o código de verificação enviado por e-mail no cadastro
+        boolean verificado
 ) {
 }

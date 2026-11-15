@@ -55,6 +55,8 @@ public class DataInitializer {
 				String senhaHash = passwordEncoder.encode("adm1234567");
 				admin.setSenhaUsuario(senhaHash);
 				admin.setActive(true);
+				// o admin semeado não passa pelo cadastro, então não recebe código de verificação
+				admin.setVerificado(true);
 
 				Role role = roleRepository.findRoleByNomeRole(RoleType.ADMIN)
 						.orElseThrow(() -> new RuntimeException("Sem role com o nome informado!"));

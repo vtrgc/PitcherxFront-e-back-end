@@ -22,9 +22,9 @@ export function useRequireAuth(area: AreaPagina = "autenticado") {
   const pathname = usePathname();
 
   const bloqueadoParaAdmin = area === "usuario" && isAdmin;
-  // Conta criada mas ainda não verificada pelo código do e-mail (ou desativada): o backend
-  // a mantém inativa; a interface só libera as páginas depois da verificação.
-  const aguardandoVerificacao = isAuthenticated && usuario?.isActive === false;
+  // Conta desativada, ou ativa mas sem o código do e-mail digitado (o backend pede o código
+  // para completar o cadastro): a interface só libera as páginas depois da verificação.
+  const aguardandoVerificacao = isAuthenticated && (usuario?.isActive === false || usuario?.verificado === false);
 
   useEffect(() => {
     if (isLoading) return;

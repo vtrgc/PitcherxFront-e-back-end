@@ -38,13 +38,13 @@ Resultado: **198/198 sem nenhum desses problemas** — **APROVADO**.
 
 ## 2. Endpoints identificados e testados
 
-- **177 endpoints** identificados nos controllers (método + caminho), incluindo o novo envio da foto de verificação sem login.
-- **177/177 chamados** pelo roteiro de API, com **258 verificações** de resposta, regra de negócio, persistência no banco e permissão: **258 aprovadas, 0 reprovadas**.
+- **178 endpoints** identificados nos controllers (método + caminho), incluindo os novos: envio da foto de verificação sem login e reenvio do código de verificação.
+- **178/178 chamados** pelo roteiro de API, com **269 verificações** de resposta, regra de negócio, persistência no banco e permissão: **269 aprovadas, 0 reprovadas**.
 - O log do backend no fim da bateria tem **0 "Erro interno não tratado"** e **0 linhas de nível ERROR**. Os avisos que aparecem são as recusas provocadas de propósito pelos testes (403, senha errada, conta não ativada, validação).
 
 | Grupo | Verificações |
 | --- | --- |
-| Cadastro e autenticação (com a foto de verificação) | 36 |
+| Cadastro e autenticação (com a foto e o código de verificação) | 47 |
 | Usuário e perfil | 32 |
 | Catálogos e administração | 30 |
 | Projetos | 30 |
@@ -54,7 +54,7 @@ Resultado: **198/198 sem nenhum desses problemas** — **APROVADO**.
 | Denúncias e moderação | 9 |
 | Demais endpoints (leitura, edição e exclusão) | 44 |
 | Sessão e conta desativada | 4 |
-| **Total** | **258** |
+| **Total** | **269** |
 
 ## 3. Funcionalidades testadas
 
@@ -63,6 +63,7 @@ Todas foram testadas com operação real: requisição → resposta → banco �
 | Funcionalidade | O que foi testado | Status |
 | --- | --- | --- |
 | Cadastro | Campos vazios, inválidos, e-mail duplicado, cadastro válido, código de verificação por e-mail | APROVADO |
+| Código de verificação no primeiro acesso | Depois da aprovação, o primeiro login pede o código do e-mail; sem ele as páginas não abrem; código errado, código de outra conta, pedir um novo código, código antigo invalidado | CORRIGIDO |
 | Verificação por foto | A pessoa envia a foto (rosto + documento) logo após o cadastro, ou reenvia pela tela de login se for reprovada; o admin vê a foto antes de aprovar | CORRIGIDO |
 | Aprovação de identidade | Admin aprova e reprova, e-mail enviado ao usuário | CORRIGIDO |
 | Login / logout | Senha errada, login, sessão persiste ao recarregar, logout remove o token | APROVADO |
@@ -88,7 +89,7 @@ Todas foram testadas com operação real: requisição → resposta → banco �
 
 ## 4. Erros encontrados
 
-Foram **42 defeitos** no total: 33 no backend e 9 no front (os itens 41 e 42 foram encontrados depois da primeira versão deste relatório).
+Foram **45 defeitos** no total: 35 no backend e 10 no front (os itens 41 a 45 foram encontrados depois da primeira versão deste relatório).
 
 ### Backend: execução e banco
 
@@ -147,9 +148,15 @@ Foram **42 defeitos** no total: 33 no backend e 9 no front (os itens 41 e 42 for
 41. Backend: a pessoa só podia enviar a foto de verificação estando logada, mas o login só é liberado depois da aprovação. Na prática, conta nova nunca conseguia mandar a foto e conta reprovada não conseguia reenviar; o admin aprovava sem ver foto nenhuma.
 42. Front: a tela de cadastro mandava enviar o comprovante "depois de entrar" (impossível), e o admin podia aprovar uma conta sem foto sem nenhum aviso.
 
+### Código de verificação (encontrados depois)
+
+43. Backend: `POST /usuario/verificar-conta` procurava o código no banco inteiro, sem conferir de quem era. Uma pessoa logada confirmava a conta de outra se acertasse o código dela, e dois cadastros com o mesmo código faziam a busca falhar.
+44. Backend: o login não informava se a conta já tinha digitado o código, não havia como pedir um código novo, o e-mail dizia que o código expirava em 15 minutos (o backend não tem prazo, e a aprovação costuma demorar mais), e a migração V25 não marcava como verificadas as contas antigas, que nunca receberam código.
+45. Front: o código nunca era pedido. Depois da aprovação o login ia direto para o feed, embora a tela de cadastro dissesse que ele seria pedido no primeiro acesso.
+
 ## 5. Erros corrigidos
 
-**Todos os 42 itens acima foram CORRIGIDOS e testados de novo** com os três roteiros, que passaram por completo depois das correções.
+**Todos os 45 itens acima foram CORRIGIDOS e testados de novo** com os três roteiros, que passaram por completo depois das correções.
 
 | Área | Principais mudanças |
 | --- | --- |
@@ -160,9 +167,10 @@ Foram **42 defeitos** no total: 33 no backend e 9 no front (os itens 41 e 42 for
 | Backend: sessão | `JWT_SECRET` lido do ambiente, validade de 7 dias, `SecurityFilter` ignora token de conta inexistente ou desativada |
 | Backend: regras | Validações de proposta, contraproposta, contrato, projeto e solicitação. Exclusão de conta limpa os vínculos ou responde 400 com explicação. E-mails não derrubam a operação (a falha fica registrada no log). |
 | Backend: DTOs e mappers | `PropostaMapper`/`PropostaResponseDTO` (id, projeto, autor), `ContratoMapper` (id da proposta), `UsuarioMapper` (não sobrescreve senha nem foto), DTOs de perfil com biografia, contraproposta com justificativa |
+| Backend: código de verificação | `verificar-conta` confere o código da conta logada; o login devolve `verificado`; novo `POST /usuario/reenviar-codigo-verificacao` (gera outro código, invalida o anterior e envia por e-mail); migração `V46` marca como verificadas as contas ativas sem código pendente (o que a V25 pretendia); admin semeado já nasce verificado; e-mail do código sem o prazo de 15 minutos que o backend não aplica |
 | Backend: verificação por foto | Novo endpoint público `POST /usuario/cadastro/comprovante-identidade` (e-mail, senha e foto): só aceita conta ainda inativa, responde a mesma mensagem para e-mail inexistente e senha errada, e reaproveita a regra existente (volta a PENDENTE, conta o envio, limite de 5 após reprovação, avisa os admins) |
 | Backend: templates | `identidade-aprovada.html` e `identidade-reprovada.html` (este explica como reenviar a foto pela tela de login) |
-| Front | `EnvioFotoVerificacao` (foto com prévia na tela "Conta criada" e na tela de login de conta aguardando aprovação), aviso ao admin ao aprovar conta sem foto, `DadosConta` (nome, e-mail e telefone com confirmação da senha), biografia no perfil, contratos (quem pode aceitar e editar), propostas (autor vindo do servidor, valor atualizado após contraproposta, justificativa), CRUD do admin, `usuario.service`, recomendações |
+| Front | Código de verificação pedido no primeiro acesso (login e páginas protegidas levam à tela do código enquanto `verificado` for `false`), botão "peça um novo código", `EnvioFotoVerificacao` (foto com prévia na tela "Conta criada" e na tela de login de conta aguardando aprovação), aviso ao admin ao aprovar conta sem foto, `DadosConta` (nome, e-mail e telefone com confirmação da senha), biografia no perfil, contratos (quem pode aceitar e editar), propostas (autor vindo do servidor, valor atualizado após contraproposta, justificativa), CRUD do admin, `usuario.service`, recomendações |
 
 A arquitetura existente foi mantida: nenhum recurso foi removido e nenhum endpoint mudou de caminho.
 
@@ -199,15 +207,15 @@ cadastro com verificação por e-mail, aprovação de identidade, login, logout,
 
 | Teste | Resultado | Status |
 | --- | --- | --- |
-| API ponta a ponta (`e2e/api_auditoria.py`) | 258/258 verificações, 177/177 endpoints | APROVADO |
+| API ponta a ponta (`e2e/api_auditoria.py`) | 269/269 verificações, 178/178 endpoints | APROVADO |
 | Navegador: páginas (`e2e/navegador_auditoria.js`) | 198/198 aberturas sem erros (49 rotas × perfis × 3 tamanhos) | APROVADO |
 | Navegador: fluxos (`e2e/navegador_auditoria.js`) | 33/33 aprovados, 1 não testado (imagens do Unsplash) | APROVADO |
 | Negociação no navegador (`e2e/negociacao_navegador.js`) | 47/47. Os únicos HTTP 400 foram os provocados de propósito: e-mail duplicado e login de conta inativa. | APROVADO |
-| Front: testes unitários (vitest) | 114/114 (inclui o envio da foto sem login) | APROVADO |
+| Front: testes unitários (vitest) | 115/115 (inclui o envio da foto sem login e o reenvio do código) | APROVADO |
 | Front: TypeScript (`tsc --noEmit`) | 0 erros | APROVADO |
 | Front: ESLint | 0 erros. Os 44 avisos já existiam antes da auditoria; nenhum aviso novo. | APROVADO |
 | Backend: `mvn test` | 24 testes, 0 falhas e 0 erros (19 que já existiam e 5 novos em `PermissoesTest`) | APROVADO |
-| Flyway | 45 migrações aplicadas num banco vazio | APROVADO |
+| Flyway | 46 migrações aplicadas num banco vazio; a `V46` também rodou no banco da auditoria, que já tinha dados (1 conta antiga marcada como verificada, 32 com código pendente mantidas) | APROVADO |
 
 ## 10. Build do front e do backend
 
@@ -224,7 +232,7 @@ cadastro com verificação por e-mail, aprovação de identidade, login, logout,
 | `JWT_SECRET` | Definir como variável de ambiente do sistema em produção. Sem ela, o backend usa um segredo de desenvolvimento e mostra um aviso no log (veja `.env-exemple`). | NÃO TESTADO em produção |
 | SMTP real | Os e-mails foram testados com um SMTP local de teste. A entrega por um provedor real depende das credenciais de e-mail do servidor. | NÃO TESTADO |
 | Remetente dos e-mails | O endereço do remetente está fixo no `EmailService`. Ele precisa ser o mesmo da conta SMTP usada em produção. | NÃO TESTADO |
-| Migrações num banco com dados | Testadas apenas num banco vazio. Antes de aplicar em produção, faça backup e rode `V43`, `V44` e `V45` numa cópia (a `V45` troca a restrição única do título do termo de vínculo). | NÃO TESTADO |
+| Migrações no banco de produção | Testadas num banco vazio e num banco de testes com dados, mas não no banco real. Antes de aplicar em produção, faça backup e rode `V43` a `V46` numa cópia (a `V45` troca a restrição única do título do termo de vínculo; a `V46` marca como verificadas as contas ativas sem código pendente). | NÃO TESTADO |
 | Imagens do Unsplash | Dependem do acesso à internet do servidor e do navegador | NÃO TESTADO |
 | `BACKEND_URL` do front | Precisa apontar para o backend no ambiente de publicação | APROVADO (testado localmente) |
 | `FRONTEND_URL_1` do backend (CORS) | Precisa ser exatamente o endereço do site. Com outro endereço (por exemplo `127.0.0.1` em vez de `localhost`), o backend recusa o cadastro e as demais chamadas com "Você não tem permissão". | APROVADO (testado localmente) |

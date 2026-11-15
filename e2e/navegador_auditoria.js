@@ -108,6 +108,9 @@ const PNG = Buffer.from(
     const c = await api("/usuario/cadastro-usuario", null, "POST", { nomeUsuario: nome, emailUsuario: email, senhaUsuario: SENHA });
     await api(`/usuario/admin/analise-identidade/${c.body.idUsuario}`, adm, "POST", { status: "APROVADA" });
     const l = await api("/usuario/login", null, "POST", { emailUsuario: email, senhaUsuario: SENHA });
+    // o código do e-mail é pedido no primeiro acesso; estas contas só servem de cenário
+    const cod = codigoNoEmail(email, 0);
+    if (cod) await api("/usuario/verificar-conta", l.body.token, "POST", { codigoVerificacao: cod });
     contas[chave] = { nome, email, id: c.body.idUsuario, token: l.body.token, senha: SENHA };
   }
   const { ana, bia } = contas;
@@ -293,6 +296,41 @@ const PNG = Buffer.from(
     }
   } else naoTestado("recuperação de senha pela tela", "sem log de e-mails (MAILS_LOG)");
   await page.context().close();
+
+  // ---------------------------------------------------------------- primeiro acesso: código do e-mail
+  titulo("Primeiro acesso (código de verificação)");
+  if (MAILS_LOG) {
+    const caio = { nome: "Caio Navegador", email: `caio.${sufixo}@teste.com` };
+    const c = await api("/usuario/cadastro-usuario", null, "POST", { nomeUsuario: caio.nome, emailUsuario: caio.email, senhaUsuario: SENHA });
+    await api(`/usuario/admin/analise-identidade/${c.body.idUsuario}`, adm, "POST", { status: "APROVADA" });
+    const pv = await abrir();
+    await pv.goto(BASE + "/auth/login", { waitUntil: "networkidle" });
+    await pv.fill("input[name=email]", caio.email);
+    await pv.fill("input[name=password]", SENHA);
+    await pv.getByRole("button", { name: "Entrar" }).click();
+    await pv.waitForURL(/\/auth\/verificar-conta/, { timeout: 15000 }).catch(() => {});
+    ok("primeiro acesso depois da aprovação pede o código do e-mail", pv.url().includes("/auth/verificar-conta"), pv.url());
+    await pv.goto(BASE + "/feed");
+    await pv.waitForURL(/\/auth\/verificar-conta/, { timeout: 10000 }).catch(() => {});
+    ok("sem o código, as páginas protegidas voltam para a verificação", pv.url().includes("/auth/verificar-conta"), pv.url());
+    await pv.getByLabel("Código de verificação").fill("000000");
+    await pv.getByRole("button", { name: "Verificar conta" }).click();
+    ok("código errado mostra aviso", await ve(pv.getByText(/Código inválido/)));
+    const antesReenvio = qtdEmails();
+    await pv.getByRole("button", { name: /peça um novo código/ }).click();
+    ok("pedir um novo código pela tela", await ve(pv.getByText(/Enviamos um novo código/)));
+    const novoCodigo = codigoNoEmail(caio.email, antesReenvio);
+    ok("novo código chega por e-mail", !!novoCodigo);
+    if (novoCodigo) {
+      await pv.getByLabel("Código de verificação").fill(novoCodigo);
+      await pv.getByRole("button", { name: "Verificar conta" }).click();
+      await pv.waitForURL((u) => !u.pathname.startsWith("/auth/verificar-conta"), { timeout: 15000 }).catch(() => {});
+      ok("código correto conclui o cadastro (segue para completar o perfil)", pv.url().includes("/auth/completar-cadastro"), pv.url());
+      await pv.goto(BASE + "/feed", { waitUntil: "networkidle" });
+      ok("depois de verificar, as páginas ficam liberadas", pv.url().includes("/feed"), pv.url());
+    }
+    await pv.context().close();
+  } else naoTestado("código de verificação no primeiro acesso", "sem log de e-mails (MAILS_LOG)");
 
   // ---------------------------------------------------------------- 3. perfil
   titulo("Perfil");

@@ -18,14 +18,18 @@ export function useRequireAdmin() {
       router.replace(`/auth/login?redirect=%2Fadmin${sessaoExpirada ? "&expirada=1" : ""}`);
       return;
     }
-    if (usuario?.isActive === false) {
+    if (usuario?.isActive === false || usuario?.verificado === false) {
       router.replace("/auth/verificar-conta?redirect=%2Fadmin");
       return;
     }
     if (!isAdmin) {
       router.replace("/feed");
     }
-  }, [isLoading, isAuthenticated, isAdmin, router, sessaoExpirada, usuario?.isActive]);
+  }, [isLoading, isAuthenticated, isAdmin, router, sessaoExpirada, usuario?.isActive, usuario?.verificado]);
 
-  return { usuario, isAdmin, pronto: !isLoading && isAuthenticated && isAdmin && usuario?.isActive !== false };
+  return {
+    usuario,
+    isAdmin,
+    pronto: !isLoading && isAuthenticated && isAdmin && usuario?.isActive !== false && usuario?.verificado !== false,
+  };
 }
