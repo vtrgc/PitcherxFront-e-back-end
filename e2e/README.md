@@ -1,10 +1,11 @@
 # Testes ponta a ponta do PitcherX
 
-Dois roteiros que usam o **front e o backend rodando de verdade** (nada é simulado):
+Três roteiros que usam o **front e o backend rodando de verdade** (nada é simulado):
 
 | Arquivo | O que testa |
 | --- | --- |
 | `api_auditoria.py` | Todos os endpoints do backend (176), fluxos completos e regras de permissão: cadastro, aprovação de identidade, login, recuperação de senha, perfil, projetos, propostas, contrapropostas, contratos, publicações, curtidas, comentários, conexões, notificações, denúncias, administração e tokens inválidos. Mostra a cobertura de endpoints no final. |
+| `negociacao_navegador.js` | Playwright: cadastro (vazio, inválido, e-mail duplicado, válido), aprovação pelo admin, criar/editar/excluir projeto, acesso sem permissão, proposta, contrapropostas (rejeitar, nova, aceitar), aceite final, recusa e telas no celular. |
 | `navegador_auditoria.js` | Playwright: abre todas as páginas (visitante, admin e usuários) em computador, tablet e celular, procurando erros de execução, respostas HTTP de erro, imagens quebradas e rolagem horizontal; depois executa fluxos pela tela (logout, senha errada, redefinição de senha, edição da conta, foto, capa, biografia, publicar, curtir, comentar, buscar, seguir, trocar senha, cadastros do admin). |
 
 Os dados são criados com e-mails aleatórios e nada que já exista no banco é apagado.
@@ -25,6 +26,7 @@ Os dados são criados com e-mails aleatórios e nada que já exista no banco é 
    ```bash
    python3 e2e/api_auditoria.py
    node e2e/navegador_auditoria.js     # requer o pacote playwright instalado
+   node e2e/negociacao_navegador.js
    ```
 
 `MAILS_LOG` é opcional. Quando o backend envia e-mails para um SMTP de teste que grava as
