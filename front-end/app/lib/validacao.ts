@@ -24,7 +24,11 @@ export function validarCadastro(dados: {
   telefone?: string;
 }): ErrosCadastro {
   const erros: ErrosCadastro = {};
-  if (!dados.nome.trim()) erros.nome = "Informe seu nome.";
+  const nome = dados.nome.trim().replace(/\s+/g, " ");
+  if (!nome) erros.nome = "Informe seu nome.";
+  else if (nome.length < 3) erros.nome = "O nome deve ter pelo menos 3 caracteres.";
+  else if (nome.length > 120) erros.nome = "Use no máximo 120 caracteres.";
+  else if (!/\p{L}.*\p{L}/u.test(nome)) erros.nome = "Informe um nome válido.";
   if (!dados.email.trim()) erros.email = "Informe seu e-mail.";
   else if (!emailValido(dados.email)) erros.email = "Informe um e-mail válido.";
   if (dados.telefone && dados.telefone.trim() && !telefoneValido(dados.telefone)) {
@@ -32,6 +36,9 @@ export function validarCadastro(dados: {
   }
   if (!dados.senha) erros.senha = "Crie uma senha.";
   else if (dados.senha.length < SENHA_MINIMA) erros.senha = `A senha deve ter pelo menos ${SENHA_MINIMA} caracteres.`;
+  else if (dados.senha.length > 72) erros.senha = "Use no máximo 72 caracteres.";
+  else if (!/\p{L}/u.test(dados.senha) || !/\d/.test(dados.senha)) erros.senha = "Use letras e números na senha.";
+  else if (dados.email.trim() && dados.senha.toLowerCase() === dados.email.trim().toLowerCase()) erros.senha = "A senha não pode ser igual ao e-mail.";
   if (dados.senha && dados.confirmarSenha !== dados.senha) erros.confirmarSenha = "As senhas não coincidem.";
   return erros;
 }

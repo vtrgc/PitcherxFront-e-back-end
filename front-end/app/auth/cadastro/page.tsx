@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Lock, Mail, Phone, User } from "lucide-react";
+import { Clock, Lock, Mail, MailCheck, Phone, ShieldCheck, User } from "lucide-react";
 import { cadastrarUsuario } from "../../services/usuario.service";
 import { useAuth } from "../../context/AuthContext";
 import { ApiError, NetworkError } from "../../lib/api";
@@ -25,6 +25,8 @@ export default function Cadastro() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
   const [erros, setErros] = useState<ErrosCadastro>({});
+  // Conta criada, mas ainda inativa (aguardando a aprovação da identidade pela administração).
+  const [contaCriada, setContaCriada] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && !loading) {
@@ -54,9 +56,18 @@ export default function Cadastro() {
         telefoneUsuario: somenteDigitos(telefone) || undefined,
       });
     } catch (error) {
-      setErro(
-        error instanceof ApiError || error instanceof NetworkError ? error.message : "Não foi possível criar a conta."
-      );
+      if (error instanceof ApiError && error.status === 400 && /j[aá] existe.*e-?mail/i.test(error.payload?.message ?? "")) {
+        setErros({ email: "Este e-mail já está cadastrado." });
+        setErro("Já existe uma conta com este e-mail. Entre com ela ou recupere a senha.");
+      } else if (error instanceof ApiError && Object.keys(error.errosDeCampo).length > 0) {
+        const campos = error.errosDeCampo;
+        setErros({ nome: campos.nomeUsuario, email: campos.emailUsuario, senha: campos.senhaUsuario, telefone: campos.telefoneUsuario });
+        setErro("Revise os campos destacados.");
+      } else {
+        setErro(
+          error instanceof ApiError || error instanceof NetworkError ? error.message : "Não foi possível criar a conta."
+        );
+      }
       setLoading(false);
       return;
     }
@@ -66,10 +77,56 @@ export default function Cadastro() {
       // O backend cria a conta inativa (o login só funciona após a aprovação da identidade);
       // se ela já estiver ativa: verificação do código e depois completar o perfil.
       router.replace(novo.isActive ? "/auth/completar-cadastro" : "/auth/verificar-conta?novo=1");
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 400 && /ativad/i.test(error.payload?.message ?? "")) {
+        // Fluxo normal do backend: a conta nasce inativa até a administração aprovar a identidade.
+        setContaCriada(email.trim().toLowerCase());
+        setLoading(false);
+        return;
+      }
       // A conta foi criada; só o login automático falhou.
       router.replace("/auth/login?cadastro=1");
     }
+  }
+
+  if (contaCriada) {
+    return (
+      <AuthShell>
+        <div className="ax-form">
+          <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700" aria-hidden="true">
+            <MailCheck size={24} />
+          </span>
+          <h1 className="ax-title">Conta criada!</h1>
+          <p className="ax-lead">
+            Recebemos o seu cadastro com o e-mail <strong className="text-ink-900">{contaCriada}</strong>.
+          </p>
+          <ol className="mt-5 space-y-3 text-[14px] text-ink-700">
+            <li className="flex gap-3">
+              <Clock size={18} className="mt-0.5 shrink-0 text-brand-600" aria-hidden="true" />
+              <span>
+                <strong>Aguarde a aprovação.</strong> Para manter a plataforma segura, a administração confere cada nova conta. Você
+                receberá um e-mail quando ela for liberada.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <MailCheck size={18} className="mt-0.5 shrink-0 text-brand-600" aria-hidden="true" />
+              <span>
+                <strong>Guarde o código de verificação</strong> que enviamos por e-mail: ele será pedido no primeiro acesso.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <ShieldCheck size={18} className="mt-0.5 shrink-0 text-brand-600" aria-hidden="true" />
+              <span>
+                Depois de entrar, envie o comprovante de identidade em <strong>Configurações</strong> e complete o seu perfil.
+              </span>
+            </li>
+          </ol>
+          <Link href="/auth/login?cadastro=1" className="ax-btn mt-7 inline-flex w-full items-center justify-center">
+            Ir para o login
+          </Link>
+        </div>
+      </AuthShell>
+    );
   }
 
   return (
@@ -134,7 +191,7 @@ export default function Cadastro() {
             label="Senha"
             type="password"
             name="password"
-            placeholder="Mínimo de 6 caracteres"
+            placeholder="Mínimo de 6 caracteres, com letras e números"
             autoComplete="new-password"
             icon={<Lock size={18} />}
             value={senha}

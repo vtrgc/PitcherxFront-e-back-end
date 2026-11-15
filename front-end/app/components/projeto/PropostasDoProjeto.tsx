@@ -6,7 +6,10 @@ import { Check, ChevronRight, HandCoins, Loader2, X } from "lucide-react";
 import Alerta from "../ui/Alerta";
 import { cls } from "../ui/estilos";
 import { useFeedback } from "../ui/FeedbackProvider";
-import { ChipStatusNegociacao } from "./ChipsNegociacao";
+import { ChipSituacao } from "./ChipsNegociacao";
+import { contrapropostasDa, situacaoNegociacao, temContraPendente } from "../../lib/negociacao";
+import { listarContraPropostasDoProjeto } from "../../services/contraProposta.service";
+import { ContraProposta } from "../../types/ContraProposta";
 import { mensagemErro } from "../../lib/api";
 import { formatarMoeda } from "../../lib/validacao";
 import { aceitarProposta, listarPropostasDoProjeto, recusarProposta } from "../../services/proposta.service";
@@ -28,6 +31,7 @@ export default function PropostasDoProjeto({
 }) {
   const { notificar, confirmar } = useFeedback();
   const [propostas, setPropostas] = useState<Proposta[]>([]);
+  const [contras, setContras] = useState<ContraProposta[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
   const [processando, setProcessando] = useState<number | null>(null);
@@ -36,7 +40,12 @@ export default function PropostasDoProjeto({
     setLoading(true);
     setErro("");
     try {
-      setPropostas([...((await listarPropostasDoProjeto(projetoId)) ?? [])].sort((a, b) => b.idProposta - a.idProposta));
+      const [lista, listaContras] = await Promise.all([
+        listarPropostasDoProjeto(projetoId),
+        listarContraPropostasDoProjeto(projetoId).catch(() => [] as ContraProposta[]),
+      ]);
+      setPropostas([...(lista ?? [])].sort((a, b) => b.idProposta - a.idProposta));
+      setContras(listaContras ?? []);
     } catch (e) {
       setErro(mensagemErro(e, "Não foi possível carregar as propostas deste projeto."));
     } finally {
@@ -86,14 +95,20 @@ export default function PropostasDoProjeto({
         <ul className="mt-3">
           {propostas.map((p) => {
             const pendente = (p.statusProposta ?? "PENDENTE") === "PENDENTE";
+            const daProposta = contrapropostasDa(p.idProposta, contras);
+            const contraAberta = temContraPendente(daProposta);
+            const situacao = situacaoNegociacao(p, daProposta, ehCriador ? "dono" : "outro");
             return (
               <li key={p.idProposta} className={`${cls.linha} flex flex-wrap items-start justify-between gap-3`}>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={cls.chip}>#{p.idProposta}</span>
                     <span className="text-[14px] font-bold text-ink-900">{formatarMoeda(p.valorProposta)}</span>
-                    <ChipStatusNegociacao status={p.statusProposta} />
+                    <ChipSituacao situacao={situacao} />
                   </div>
+                  <p className="mt-1 text-[12.5px] text-ink-500">
+                    {p.autor ? `Enviada por ${p.autor.nome}` : "Autor não identificado"} · {situacao.dica}
+                  </p>
                   <p className={`${cls.texto} mt-2 line-clamp-3 break-words !text-[14px]`}>{p.descricaoProposta}</p>
                   <Link href={`/propostas/${p.idProposta}`} className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-brand-700 hover:underline">
                     {ehCriador ? "Negociar / contrapropor" : "Ver proposta"} <ChevronRight size={14} aria-hidden="true" />
@@ -101,7 +116,13 @@ export default function PropostasDoProjeto({
                 </div>
                 {ehCriador && pendente && (
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    <button type="button" onClick={() => decidir(p, true)} disabled={processando !== null} className={`${cls.btnPrimario} !text-[13px]`}>
+                    <button
+                      type="button"
+                      onClick={() => decidir(p, true)}
+                      disabled={processando !== null || contraAberta}
+                      title={contraAberta ? "Há uma contraproposta aguardando o autor" : undefined}
+                      className={`${cls.btnPrimario} !text-[13px]`}
+                    >
                       {processando === p.idProposta ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}
                       Aceitar
                     </button>

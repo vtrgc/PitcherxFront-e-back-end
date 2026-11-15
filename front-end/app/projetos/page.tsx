@@ -22,7 +22,7 @@ import { useAuth } from "../context/AuthContext";
 import { mensagemErro } from "../lib/api";
 import { Projeto, ProjetoRequest } from "../types/Projeto";
 import { TipoProjeto } from "../types/TipoProjeto";
-import { listarProjetos, criarProjeto, buscarProjetos, substituirImagensProjeto } from "../services/projeto.service";
+import { listarProjetos, criarProjeto, buscarProjetos, substituirImagensProjeto, substituirVideosProjeto } from "../services/projeto.service";
 import { apiDateToInput } from "../lib/date";
 import { listarTiposProjeto } from "../services/tipoProjeto.service";
 import { listarPorUsuario } from "../services/projetoUsuario.service";
@@ -140,20 +140,27 @@ export default function ProjetosPage() {
     setErroBusca("");
   }
 
-  async function publicarProjeto(dados: ProjetoRequest, arquivos: File[]) {
+  async function publicarProjeto(dados: ProjetoRequest, arquivos: File[], videos: File[]) {
     if (!usuario) return;
     // POST /projeto/{idUsuario}: o backend já registra quem publicou como CRIADOR.
     const criado = await criarProjeto(usuario.idUsuario, dados);
+    const falhas: string[] = [];
     if (arquivos.length > 0) {
       try {
         await substituirImagensProjeto(criado.idProjeto, arquivos);
-        notificar("Projeto publicado.", "sucesso");
       } catch (error) {
-        notificar(`Projeto publicado, mas as imagens não foram salvas: ${mensagemErro(error)} Adicione-as na página do projeto.`, "erro");
+        falhas.push(`as imagens não foram salvas (${mensagemErro(error)})`);
       }
-    } else {
-      notificar("Projeto publicado.", "sucesso");
     }
+    if (videos.length > 0) {
+      try {
+        await substituirVideosProjeto(criado.idProjeto, videos);
+      } catch (error) {
+        falhas.push(`os vídeos não foram salvos (${mensagemErro(error)})`);
+      }
+    }
+    if (falhas.length > 0) notificar(`Projeto publicado, mas ${falhas.join(" e ")}. Adicione-os na página do projeto.`, "erro");
+    else notificar("Projeto publicado.", "sucesso");
     setMostrarForm(false);
     router.push(`/projetos/${criado.idProjeto}`);
   }

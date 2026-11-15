@@ -48,6 +48,12 @@ describe("validações de formulário", () => {
       senha: expect.any(String),
       confirmarSenha: expect.any(String),
     });
-    expect(validarCadastro({ nome: "Ana", email: "ana@x.com", senha: "123456", confirmarSenha: "123456" })).toEqual({});
+    expect(validarCadastro({ nome: "Ana", email: "ana@x.com", senha: "abc123", confirmarSenha: "abc123" })).toEqual({});
+    // senha só com números, nome curto e telefone incompleto
+    expect(validarCadastro({ nome: "Al", email: "a@x.com", senha: "123456", confirmarSenha: "123456", telefone: "1199" })).toMatchObject({
+      nome: expect.any(String),
+      senha: expect.stringMatching(/letras e números/),
+      telefone: expect.any(String),
+    });
   });
 });

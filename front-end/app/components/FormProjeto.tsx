@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CircleDollarSign, ImagePlus, Loader2, Save, X } from "lucide-react";
+import { CircleDollarSign, Film, ImagePlus, Loader2, Save, X } from "lucide-react";
 import { apiDateToInput, hojeServidorInput, inputDateToApi, validarDatasProjeto } from "../lib/date";
 import { LIMITES } from "../lib/limites";
 import { isValidImageUrl } from "../lib/image";
@@ -21,6 +21,7 @@ import { TipoProjeto } from "../types/TipoProjeto";
 import { cls } from "./ui/estilos";
 import Alerta from "./ui/Alerta";
 import SeletorImagens from "./SeletorImagens";
+import SeletorVideos from "./SeletorVideos";
 import SeletorRiscos from "./projeto/SeletorRiscos";
 
 /**
@@ -44,7 +45,7 @@ export default function FormProjeto({
 }: {
   projeto?: Projeto | null;
   tipos: TipoProjeto[];
-  onEnviar: (dados: ProjetoRequest, arquivos: File[]) => Promise<void>;
+  onEnviar: (dados: ProjetoRequest, arquivos: File[], videos: File[]) => Promise<void>;
   onCancelar: () => void;
   rotuloEnviar: string;
 }) {
@@ -56,6 +57,7 @@ export default function FormProjeto({
   const edicao = !!projeto;
   const [urlImagem, setUrlImagem] = useState("");
   const [arquivos, setArquivos] = useState<File[]>([]);
+  const [videos, setVideos] = useState<File[]>([]);
   const [ficha, setFicha] = useState<CamposFicha>(() => camposDaFicha(projeto?.ficha));
   const [errosFicha, setErrosFicha] = useState<ErrosFicha>({});
   const [riscoIds, setRiscoIds] = useState<number[]>(() => (projeto?.riscos ?? []).map((r) => r.idRiscoProjeto));
@@ -114,7 +116,7 @@ export default function FormProjeto({
         urlImagemProjeto: edicao ? undefined : urlImagem.trim() || undefined,
         ...camposFinanceirosApi(financeiro.ficha),
         riscoProjetoIds: riscoIds,
-      }, edicao ? [] : arquivos);
+      }, edicao ? [] : arquivos, edicao ? [] : videos);
     } catch (error) {
       setErro(mensagemErro(error, "Não foi possível salvar o projeto."));
     } finally {
@@ -292,6 +294,13 @@ export default function FormProjeto({
                 Imagens do projeto (opcional)
               </p>
               <SeletorImagens arquivos={arquivos} onChange={setArquivos} desabilitado={salvando} rotulo="Escolher imagens" />
+            </div>
+            <div>
+              <p className={`${cls.label} flex items-center gap-1.5`}>
+                <Film size={14} aria-hidden="true" />
+                Vídeos do projeto (opcional)
+              </p>
+              <SeletorVideos arquivos={videos} onChange={setVideos} desabilitado={salvando} />
             </div>
             {arquivos.length === 0 && (
               <div>

@@ -1,5 +1,6 @@
 import { ApiError, api, mapComLimite } from "../lib/api";
 import { listarProjetos } from "./projeto.service";
+import { AutorProposta, lerDescricaoProposta, montarDescricaoProposta } from "../lib/autoriaProposta";
 import { Proposta, PropostaRequest } from "../types/Proposta";
 
 /*
@@ -67,9 +68,16 @@ async function preencherProjetos(lista: Proposta[]): Promise<Proposta[]> {
 
 /** Resposta de PUT sem os campos que o backend devolve nulos (para não sobrescrever o estado da tela). */
 function semCamposNulos(r: Proposta, id: number): Proposta {
-  const { projetoId, idProposta, ...resto } = r ?? ({} as Proposta);
+  const { projetoId, idProposta, ...resto } = normalizarProposta(r ?? ({} as Proposta));
   void idProposta;
   return { ...resto, idProposta: id, ...(projetoId != null ? { projetoId } : {}) } as Proposta;
+}
+
+/** Separa o texto visível do bloco de autoria (ver lib/autoriaProposta). */
+export function normalizarProposta(p: Proposta): Proposta {
+  if (!p || typeof p !== "object") return p;
+  const { texto, autor } = lerDescricaoProposta(p.descricaoProposta);
+  return { ...p, descricaoProposta: texto, autor };
 }
 
 // A reconstrução custa várias requisições: o resultado é compartilhado por alguns segundos entre
@@ -84,7 +92,7 @@ export function invalidarCachePropostas() {
 async function reconstruirLista(): Promise<Proposta[]> {
   const brutas = (await api<Proposta[]>("/proposta")) ?? [];
   const comId = brutas.every((p) => p.idProposta != null) ? brutas : await sondarIds(brutas.length);
-  return preencherProjetos(comId);
+  return (await preencherProjetos(comId)).map(normalizarProposta);
 }
 
 /** GET /proposta — todas as propostas (com id e projeto reconstruídos; ver acima). */
@@ -101,14 +109,14 @@ export function listarPropostas({ forcar = false }: { forcar?: boolean } = {}): 
 /** GET /proposta/projeto/{projetoId} — propostas recebidas por um projeto. */
 export async function listarPropostasDoProjeto(projetoId: number): Promise<Proposta[]> {
   const brutas = (await api<Proposta[]>(`/proposta/projeto/${projetoId}`)) ?? [];
-  if (brutas.every((p) => p.idProposta != null)) return brutas.map((p) => ({ ...p, projetoId: p.projetoId ?? projetoId }));
+  if (brutas.every((p) => p.idProposta != null)) return brutas.map((p) => normalizarProposta({ ...p, projetoId: p.projetoId ?? projetoId }));
   if (brutas.length === 0) return [];
   return (await listarPropostas()).filter((p) => p.projetoId === projetoId);
 }
 
 export async function buscarProposta(id: number): Promise<Proposta> {
   const p = await api<Proposta>(`/proposta/${id}`);
-  const comId = { ...p, idProposta: p.idProposta ?? id };
+  const comId = normalizarProposta({ ...p, idProposta: p.idProposta ?? id });
   if (comId.projetoId != null) return comId;
   const daLista = (await listarPropostas().catch(() => [] as Proposta[])).find((x) => x.idProposta === id);
   return { ...comId, projetoId: daLista?.projetoId ?? null };
@@ -118,25 +126,30 @@ export async function buscarProposta(id: number): Promise<Proposta> {
  * POST /proposta — o autor é o usuário logado (vem do token). Como a resposta vem sem id
  * (defeito do mapper), o id é descoberto logo em seguida: a proposta mais recente idêntica.
  */
-export async function criarProposta(data: PropostaRequest): Promise<Proposta> {
+export async function criarProposta(data: PropostaRequest, autor?: AutorProposta | null): Promise<Proposta> {
+  const corpo = { ...data, descricaoProposta: montarDescricaoProposta(data.descricaoProposta, autor) };
   const criada = await api<Proposta>("/proposta", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify(corpo),
   });
   invalidarCachePropostas();
-  if (criada?.idProposta != null) return criada;
+  if (criada?.idProposta != null) return normalizarProposta(criada);
+  const texto = lerDescricaoProposta(corpo.descricaoProposta).texto;
   const candidatas = (await listarPropostas().catch(() => [] as Proposta[])).filter(
-    (p) => p.descricaoProposta === data.descricaoProposta && (p.valorProposta ?? null) === (data.valorProposta ?? null)
+    (p) =>
+      p.descricaoProposta === texto &&
+      (p.valorProposta ?? null) === (data.valorProposta ?? null) &&
+      (autor ? p.autor?.id === autor.id : true)
   );
   const nova = candidatas.sort((a, b) => b.idProposta - a.idProposta)[0];
-  return nova ? { ...nova, projetoId: nova.projetoId ?? data.projetoId ?? null } : { ...criada, projetoId: data.projetoId ?? null };
+  return nova ? { ...nova, projetoId: nova.projetoId ?? data.projetoId ?? null } : normalizarProposta({ ...criada, projetoId: data.projetoId ?? null });
 }
 
 /** PUT /proposta/{id} — só o autor; bloqueado se houver contraproposta pendente. */
-export async function atualizarProposta(id: number, data: PropostaRequest) {
+export async function atualizarProposta(id: number, data: PropostaRequest, autor?: AutorProposta | null) {
   const r = await api<Proposta>(`/proposta/${id}`, {
     method: "PUT",
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, descricaoProposta: montarDescricaoProposta(data.descricaoProposta, autor) }),
   });
   invalidarCachePropostas();
   return semCamposNulos(r, id);

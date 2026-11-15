@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Briefcase, Check, ChevronRight, HandCoins, Loader2, Pencil, Plus, Reply, Trash2, X } from "lucide-react";
+import { Briefcase, Check, ChevronRight, HandCoins, Loader2, Pencil, Plus, Reply, Trash2, UserRound, X } from "lucide-react";
 
 import PageShell from "../components/PageShell";
 import Paginacao from "../components/ui/Paginacao";
@@ -15,7 +15,8 @@ import { CardGridSkeleton } from "../components/Skeleton";
 import Alerta from "../components/ui/Alerta";
 import { cls } from "../components/ui/estilos";
 import { useFeedback } from "../components/ui/FeedbackProvider";
-import { ChipStatusNegociacao } from "../components/projeto/ChipsNegociacao";
+import { ChipSituacao, ChipStatusNegociacao } from "../components/projeto/ChipsNegociacao";
+import { contrapropostasDa, situacaoNegociacao, temContraPendente } from "../lib/negociacao";
 import { useAuth } from "../context/AuthContext";
 import { ApiError, mensagemErro } from "../lib/api";
 import { formatarDataHora } from "../lib/date";
@@ -34,7 +35,7 @@ import {
   recusarProposta,
   registrarPropostaEnviada,
 } from "../services/proposta.service";
-import { listarContraPropostasCriadas, listarContraPropostasRecebidas } from "../services/contraProposta.service";
+import { listarContraPropostas, listarContraPropostasCriadas, listarContraPropostasRecebidas } from "../services/contraProposta.service";
 import { listarProjetos } from "../services/projeto.service";
 import { listarIdsProjetosCriados } from "../services/projetoUsuario.service";
 
@@ -76,6 +77,8 @@ function PropostasConteudo() {
   const [meusProjetos, setMeusProjetos] = useState<Set<number>>(new Set());
   const [contrasRecebidas, setContrasRecebidas] = useState<ContraProposta[]>([]);
   const [contrasEnviadas, setContrasEnviadas] = useState<ContraProposta[]>([]);
+  // Todas as contrapropostas (GET /contra-proposta): situação de cada negociação na lista.
+  const [todasContras, setTodasContras] = useState<ContraProposta[]>([]);
   const [enviadasLocais, setEnviadasLocais] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [erroCarregamento, setErroCarregamento] = useState("");
@@ -94,13 +97,15 @@ function PropostasConteudo() {
     setLoading(true);
     setErroCarregamento("");
     try {
-      const [lista, listaProjetos, meus, cRecebidas, cEnviadas] = await Promise.all([
+      const [lista, listaProjetos, meus, cRecebidas, cEnviadas, cTodas] = await Promise.all([
         listarPropostas({ forcar: true }),
         listarProjetos().catch(() => [] as Projeto[]),
         listarIdsProjetosCriados(idUsuario).catch(() => new Set<number>()),
         listarContraPropostasRecebidas().catch(() => [] as ContraProposta[]),
         listarContraPropostasCriadas().catch(() => [] as ContraProposta[]),
+        listarContraPropostas().catch(() => [] as ContraProposta[]),
       ]);
+      setTodasContras(cTodas ?? []);
       setPropostas([...(lista ?? [])].sort((a, b) => b.idProposta - a.idProposta));
       setProjetos(listaProjetos ?? []);
       setMeusProjetos(meus);
@@ -132,11 +137,21 @@ function PropostasConteudo() {
   const nomeProjeto = useMemo(() => new Map(projetos.map((p) => [p.idProjeto, p.nomeProjeto])), [projetos]);
   // Projetos que podem receber proposta minha: todos, menos os que eu criei.
   const projetosDestino = useMemo(() => projetos.filter((p) => !meusProjetos.has(p.idProjeto)), [projetos, meusProjetos]);
+  // Propostas que enviei: autoria registrada na proposta, envios deste navegador e as que
+  // receberam contraproposta endereçada a mim.
   const minhasEnviadas = useMemo(() => {
     const ids = new Set(enviadasLocais);
     contrasRecebidas.forEach((c) => ids.add(c.propostaId));
+    propostas.forEach((p) => {
+      if (idUsuario && p.autor?.id === idUsuario) ids.add(p.idProposta);
+    });
     return ids;
-  }, [enviadasLocais, contrasRecebidas]);
+  }, [enviadasLocais, contrasRecebidas, propostas, idUsuario]);
+  const contrasPorProposta = useMemo(() => {
+    const mapa = new Map<number, ContraProposta[]>();
+    for (const p of propostas) mapa.set(p.idProposta, contrapropostasDa(p.idProposta, todasContras));
+    return mapa;
+  }, [propostas, todasContras]);
 
   const propostasDaAba = useMemo(() => {
     if (aba === "recebidas") return propostas.filter((p) => p.projetoId != null && meusProjetos.has(p.projetoId));
@@ -149,7 +164,9 @@ function PropostasConteudo() {
     () =>
       termo
         ? propostasDaAba.filter((p) =>
-            `${p.idProposta} ${p.descricaoProposta} ${p.projetoId ? nomeProjeto.get(p.projetoId) ?? "" : ""}`.toLowerCase().includes(termo)
+            `${p.idProposta} ${p.descricaoProposta} ${p.autor?.nome ?? ""} ${p.projetoId ? nomeProjeto.get(p.projetoId) ?? "" : ""}`
+              .toLowerCase()
+              .includes(termo)
           )
         : propostasDaAba,
     [propostasDaAba, termo, nomeProjeto]
@@ -171,11 +188,24 @@ function PropostasConteudo() {
     const projetoId = editando ? editando.projetoId ?? (projetoForm || null) : projetoForm || null;
     if (!projetoId) throw new ApiError(400, { message: "Selecione o projeto que vai receber a proposta." }, "");
     const payload = { descricaoProposta: descricao, valorProposta: valor, projetoId: Number(projetoId) };
+    const eu = { id: idUsuario, nome: usuario?.nomeUsuario ?? `Usuário #${idUsuario}` };
+    if (!editando) {
+      // Evita propostas duplicadas: uma proposta em aberto por projeto.
+      const aberta = propostas.find(
+        (p) => p.projetoId === Number(projetoId) && minhasEnviadas.has(p.idProposta) && (p.statusProposta ?? "PENDENTE") === "PENDENTE"
+      );
+      if (aberta)
+        throw new ApiError(
+          400,
+          { message: `Você já tem a proposta #${aberta.idProposta} em negociação neste projeto. Edite-a ou aguarde a resposta.` },
+          ""
+        );
+    }
     if (editando) {
-      await atualizarProposta(editando.idProposta, payload);
+      await atualizarProposta(editando.idProposta, payload, editando.autor ?? eu);
       notificar("Proposta atualizada.", "sucesso");
     } else {
-      const criada = await criarProposta(payload);
+      const criada = await criarProposta(payload, eu);
       if (criada?.idProposta) registrarPropostaEnviada(idUsuario, criada.idProposta);
       notificar("Proposta enviada. O criador do projeto vai analisá-la.", "sucesso");
       setAba("enviadas");
@@ -186,12 +216,12 @@ function PropostasConteudo() {
   }
 
   async function excluir(proposta: Proposta) {
-    const ok = await confirmar(`Excluir a proposta #${proposta.idProposta}?`, { titulo: "Excluir proposta", perigo: true });
+    const ok = await confirmar(`Cancelar a proposta #${proposta.idProposta}? Ela será excluída.`, { titulo: "Cancelar proposta", confirmarLabel: "Cancelar proposta", perigo: true });
     if (!ok || !idUsuario) return;
     try {
       await excluirProposta(proposta.idProposta);
       esquecerPropostaEnviada(idUsuario, proposta.idProposta);
-      notificar("Proposta excluída.", "sucesso");
+      notificar("Proposta cancelada.", "sucesso");
       await carregar();
     } catch (error) {
       notificar(mensagemErro(error, "Não foi possível excluir a proposta."));
@@ -370,23 +400,42 @@ function PropostasConteudo() {
             {paginacao.itens.map((proposta) => {
               const pendente = (proposta.statusProposta ?? "PENDENTE") === "PENDENTE";
               const souDonoDoProjeto = proposta.projetoId != null && meusProjetos.has(proposta.projetoId);
-              const souAutor = minhasEnviadas.has(proposta.idProposta);
+              const souAutor = !souDonoDoProjeto && minhasEnviadas.has(proposta.idProposta);
+              const contrasDaProposta = contrasPorProposta.get(proposta.idProposta) ?? [];
+              const contraAberta = temContraPendente(contrasDaProposta);
+              const situacao = situacaoNegociacao(proposta, contrasDaProposta, souDonoDoProjeto ? "dono" : souAutor ? "autor" : "outro");
               return (
                 <li key={proposta.idProposta} className={`${cls.linha} flex flex-wrap items-start justify-between gap-3`}>
                   <Link href={`/propostas/${proposta.idProposta}`} className="group min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={cls.chip}>#{proposta.idProposta}</span>
                       <span className="text-[14px] font-bold text-ink-900">{formatarMoeda(proposta.valorProposta)}</span>
-                      <ChipStatusNegociacao status={proposta.statusProposta} />
+                      <ChipSituacao situacao={situacao} />
                     </div>
-                    {proposta.projetoId != null && (
-                      <p className="mt-1.5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-700">
-                        <Briefcase size={14} aria-hidden="true" /> {nomeProjeto.get(proposta.projetoId) ?? `Projeto #${proposta.projetoId}`}
-                      </p>
-                    )}
+                    <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-600">
+                      {proposta.projetoId != null && (
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-ink-700">
+                          <Briefcase size={14} aria-hidden="true" /> {nomeProjeto.get(proposta.projetoId) ?? `Projeto #${proposta.projetoId}`}
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1.5">
+                        <UserRound size={14} aria-hidden="true" />
+                        {souAutor
+                          ? "Enviada por você"
+                          : proposta.autor
+                          ? `Enviada por ${proposta.autor.nome}`
+                          : "Autor não identificado"}
+                      </span>
+                      {contrasDaProposta.length > 0 && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Reply size={14} aria-hidden="true" /> {contrasDaProposta.length} contraproposta{contrasDaProposta.length === 1 ? "" : "s"}
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-1 text-[12.5px] text-ink-500">{situacao.dica}</p>
                     <p className={`${cls.texto} mt-1.5 line-clamp-3 break-words`}>{proposta.descricaoProposta}</p>
                     <span className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-brand-700 group-hover:underline">
-                      Ver negociação
+                      {situacao.minhaVez ? "Responder" : "Ver negociação"}
                       <ChevronRight size={14} aria-hidden="true" />
                     </span>
                   </Link>
@@ -397,7 +446,8 @@ function PropostasConteudo() {
                         <button
                           type="button"
                           onClick={() => decidir(proposta, true)}
-                          disabled={processando !== null}
+                          disabled={processando !== null || contraAberta}
+                          title={contraAberta ? "Há uma contraproposta aguardando o autor" : undefined}
                           className={`${cls.btnPrimario} !px-3 !text-[13px]`}
                         >
                           {processando === proposta.idProposta ? (
@@ -417,7 +467,7 @@ function PropostasConteudo() {
                         </button>
                       </>
                     )}
-                    {souAutor && pendente && (
+                    {souAutor && pendente && !contraAberta && (
                       <>
                         <button
                           type="button"
@@ -431,7 +481,8 @@ function PropostasConteudo() {
                         >
                           <Pencil size={15} />
                         </button>
-                        <button type="button" onClick={() => excluir(proposta)} className={cls.btnIconePerigo} aria-label={`Excluir proposta ${proposta.idProposta}`}>
+                        <button type="button" onClick={() => excluir(proposta)} className={cls.btnIconePerigo} aria-label={`Cancelar proposta ${proposta.idProposta}`}
+                          title="Cancelar proposta">
                           <Trash2 size={15} />
                         </button>
                       </>

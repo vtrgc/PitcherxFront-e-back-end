@@ -7,6 +7,7 @@ import { cls } from "../ui/estilos";
 import { useAuth } from "../../context/AuthContext";
 import { formatarMoeda } from "../../lib/validacao";
 import { listarRecomendacoes } from "../../services/recomendacao.service";
+import { buscarPerfilDoUsuario } from "../../services/perfilUsuario.service";
 import { ProjetoRecomendado } from "../../types/Recomendacao";
 
 /**
@@ -21,7 +22,9 @@ export default function Recomendacoes({ className = "" }: { className?: string }
   useEffect(() => {
     if (!idUsuario || isAdmin) return;
     let ativo = true;
-    listarRecomendacoes(idUsuario)
+    // O backend responde 500 para quem ainda não tem perfil profissional: só consulta com perfil.
+    buscarPerfilDoUsuario(idUsuario)
+      .then((perfil) => (perfil ? listarRecomendacoes(idUsuario) : []))
       .then((l) => ativo && setItens(l))
       .catch(() => ativo && setItens([]));
     return () => {

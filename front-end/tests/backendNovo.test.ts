@@ -82,3 +82,27 @@ describe("administração", () => {
     expect(fetchMock.mock.calls[0][1].method).toBe("PUT");
   });
 });
+
+describe("autoria e situação da negociação", () => {
+  it("bloco de autoria some do texto e volta na leitura", async () => {
+    const { montarDescricaoProposta, lerDescricaoProposta } = await import("../app/lib/autoriaProposta");
+    const d = montarDescricaoProposta("Invisto 5 mil --> já", { id: 7, nome: "Bruno" });
+    expect(lerDescricaoProposta(d)).toEqual({ texto: "Invisto 5 mil --> já", autor: { id: 7, nome: "Bruno" } });
+    // reeditar não duplica o bloco
+    expect(lerDescricaoProposta(montarDescricaoProposta(d, { id: 7, nome: "Bruno" })).texto).toBe("Invisto 5 mil --> já");
+    expect(lerDescricaoProposta("antiga")).toEqual({ texto: "antiga", autor: null });
+  });
+
+  it("situação muda conforme o papel e os status reais", async () => {
+    const { situacaoNegociacao, valorAcordado } = await import("../app/lib/negociacao");
+    const p = { idProposta: 1, descricaoProposta: "x", valorProposta: 100, statusProposta: "PENDENTE" };
+    const pend = [{ idContraProposta: 1, propostaId: 1, descricaoContraProposta: "y", valorContraProposta: 80, status: "PENDENTE" }];
+    expect(situacaoNegociacao(p, [], "dono")).toMatchObject({ codigo: "aguardando_dono", minhaVez: true });
+    expect(situacaoNegociacao(p, pend, "autor")).toMatchObject({ codigo: "contra_pendente", rotulo: "Contraproposta recebida", minhaVez: true });
+    expect(situacaoNegociacao(p, pend, "dono")).toMatchObject({ minhaVez: false });
+    const aceita = [{ ...pend[0], status: "ACEITA" }];
+    expect(situacaoNegociacao(p, aceita, "dono")).toMatchObject({ codigo: "contra_aceita", minhaVez: true });
+    expect(valorAcordado(p, aceita)).toBe(80);
+    expect(situacaoNegociacao({ ...p, statusProposta: "RECUSADA" }, aceita, "autor").codigo).toBe("recusada");
+  });
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, FileCheck2, Loader2, RefreshCw, Upload, X } from "lucide-react";
 
@@ -23,7 +23,19 @@ import {
 import { rotuloNivel } from "../../services/nivelConta.service";
 import { Usuario } from "../../types/Usuario";
 
-const TAMANHO = 12;
+const TAMANHO_LOTE = 100;
+const POR_PAGINA = 12;
+
+/** Lê todas as páginas da fila (a busca e o filtro acontecem na tela). */
+async function listarTodasPendentes(): Promise<Usuario[]> {
+  const todos: Usuario[] = [];
+  for (let pagina = 0; pagina < 50; pagina++) {
+    const r = await listarIdentidadesPendentes(pagina, TAMANHO_LOTE);
+    todos.push(...r.itens);
+    if (r.ultima || r.itens.length === 0) break;
+  }
+  return todos;
+}
 
 /**
  * Análise de identidade (admin): GET /usuario/admin/identidade-pendentes (paginado no servidor)
@@ -42,8 +54,8 @@ export default function AdminIdentidadesPage() {
   const { notificar, confirmar } = useFeedback();
   const [pagina, setPagina] = useState(0);
   const [itens, setItens] = useState<Usuario[]>([]);
-  const [total, setTotal] = useState(0);
-  const [totalPaginas, setTotalPaginas] = useState(0);
+  const [busca, setBusca] = useState("");
+  const [somenteInativas, setSomenteInativas] = useState(true);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
   const [processando, setProcessando] = useState<number | null>(null);
@@ -58,16 +70,23 @@ export default function AdminIdentidadesPage() {
     setLoading(true);
     setErro("");
     try {
-      const r = await listarIdentidadesPendentes(pagina, TAMANHO);
-      setItens(r.itens);
-      setTotal(r.total);
-      setTotalPaginas(r.totalPaginas);
+      setItens((await listarTodasPendentes()).sort((a, b) => b.idUsuario - a.idUsuario));
     } catch (e) {
       setErro(mensagemErro(e, "Não foi possível carregar as identidades pendentes."));
     } finally {
       setLoading(false);
     }
-  }, [pagina]);
+  }, []);
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return itens.filter(
+      (u) => (!somenteInativas || !u.active) && (!termo || `${u.nomeUsuario} ${u.emailUsuario}`.toLowerCase().includes(termo))
+    );
+  }, [itens, busca, somenteInativas]);
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas - 1);
+  const visiveis = filtrados.slice(paginaAtual * POR_PAGINA, (paginaAtual + 1) * POR_PAGINA);
 
   useEffect(() => {
     if (pronto) carregar();
@@ -162,6 +181,38 @@ export default function AdminIdentidadesPage() {
         </button>
       </div>
 
+      <div className={`${cls.card} flex flex-wrap items-center gap-3 p-3`}>
+        <label htmlFor="busca-identidades" className="sr-only">
+          Buscar por nome ou e-mail
+        </label>
+        <input
+          id="busca-identidades"
+          type="search"
+          value={busca}
+          onChange={(e) => {
+            setBusca(e.target.value);
+            setPagina(0);
+          }}
+          placeholder="Buscar por nome ou e-mail"
+          className={`${cls.input} min-w-[200px] flex-1 !py-2.5`}
+        />
+        <label className="inline-flex items-center gap-2 text-[13.5px] font-medium text-ink-700">
+          <input
+            type="checkbox"
+            checked={somenteInativas}
+            onChange={(e) => {
+              setSomenteInativas(e.target.checked);
+              setPagina(0);
+            }}
+            className="h-4 w-4 accent-brand-600"
+          />
+          Somente contas ainda inativas
+        </label>
+        <span className="text-[12.5px] text-ink-500">
+          {filtrados.length} de {itens.length} na fila
+        </span>
+      </div>
+
       <input ref={inputRef} id={inputId} type="file" accept={ACCEPT_FOTO} className="sr-only" onChange={(e) => anexar(e.target.files?.[0])} />
 
       {erro && !loading && <Alerta onTentarNovamente={carregar}>{erro}</Alerta>}
@@ -172,14 +223,18 @@ export default function AdminIdentidadesPage() {
             <div key={i} className={`${cls.skeleton} h-40 rounded-2xl`} />
           ))}
         </div>
-      ) : erro ? null : itens.length === 0 ? (
+      ) : erro ? null : filtrados.length === 0 ? (
         <div className={cls.card}>
-          <EmptyState icon={FileCheck2} title="Nenhuma identidade pendente" description="Todas as contas já foram analisadas." />
+          <EmptyState
+            icon={FileCheck2}
+            title={itens.length === 0 ? "Nenhuma identidade pendente" : "Nada encontrado"}
+            description={itens.length === 0 ? "Todas as contas já foram analisadas." : "Ajuste a busca ou desmarque o filtro de contas inativas."}
+          />
         </div>
       ) : (
         <>
           <ul className="grid gap-4 md:grid-cols-2">
-            {itens.map((u) => {
+            {visiveis.map((u) => {
               const comprovante = resolverUrlImagem(u.urlComprovanteIdentidade);
               const ocupado = processando === u.idUsuario;
               return (
@@ -242,16 +297,16 @@ export default function AdminIdentidadesPage() {
           {totalPaginas > 1 && (
             <div className="flex items-center justify-between gap-3 text-[13px] text-ink-500">
               <span>
-                {total} pendente{total === 1 ? "" : "s"} · página {pagina + 1} de {totalPaginas}
+                {filtrados.length} na lista · página {paginaAtual + 1} de {totalPaginas}
               </span>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setPagina((p) => Math.max(0, p - 1))} disabled={pagina === 0} className={`${cls.btnContorno} !text-[13px]`}>
+                <button type="button" onClick={() => setPagina(Math.max(0, paginaAtual - 1))} disabled={paginaAtual === 0} className={`${cls.btnContorno} !text-[13px]`}>
                   Anterior
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPagina((p) => p + 1)}
-                  disabled={pagina + 1 >= totalPaginas}
+                  onClick={() => setPagina(paginaAtual + 1)}
+                  disabled={paginaAtual + 1 >= totalPaginas}
                   className={`${cls.btnContorno} !text-[13px]`}
                 >
                   Próxima
