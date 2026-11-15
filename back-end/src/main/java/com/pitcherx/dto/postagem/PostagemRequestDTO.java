@@ -1,6 +1,7 @@
 package com.pitcherx.dto.postagem;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -19,6 +20,9 @@ public record PostagemRequestDTO(
 		@Schema(type = "string", pattern = "dd/MM/yyyy", example = "dd/MM/yyyy")
 		LocalDate dataPostagem,
 		String urlImagemPostagem,
+		String urlVideoPostagem,
+		List<String> imagens,
+		List<String> videos,
 		@NotNull(message = "É obrigatório informar o ID do usuário a quem a postagem pertence!")
 		Long usuarioId
 		) {

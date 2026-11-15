@@ -2,7 +2,7 @@ package com.pitcherx.security;
 
 import com.pitcherx.model.Usuario;
 import com.pitcherx.repository.UsuarioRepository;
-import jakarta.persistence.EntityNotFoundException;
+import com.pitcherx.security.JwtAuthenticationException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,8 +40,14 @@ public class SecurityFilter extends OncePerRequestFilter {
             if (userDataOpt.isPresent()) {
                 JWTUserData userData = userDataOpt.get();
 
-                Usuario usuario = usuarioRepository.findUserByEmailUsuario(userData.emailUsuario())
-                        .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado!"));
+                // Usuário excluído ou desativado pelo administrador: o token deixa de valer
+                // imediatamente (antes continuava aceito até expirar; e um usuário excluído
+                // fazia o filtro lançar exceção).
+                Usuario usuario = usuarioRepository.findUserByEmailUsuario(userData.emailUsuario()).orElse(null);
+                if (usuario == null || !Boolean.TRUE.equals(usuario.getActive())) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 Set<SimpleGrantedAuthority> authorities = Optional.ofNullable(userData.roles())
                         .orElse(Collections.emptySet())

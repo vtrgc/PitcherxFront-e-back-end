@@ -31,8 +31,12 @@ public class SenhaResetService {
 
     @Transactional
     public void solicitarRedefinicaoSenha(String email) {
-        Usuario usuario = usuarioRepository.findUserByEmailUsuario(email)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        // E-mail sem conta: responde igual (204) para não revelar quais e-mails estão
+        // cadastrados. Antes lançava RuntimeException e o cliente recebia 500.
+        Usuario usuario = usuarioRepository.findUserByEmailUsuario(email).orElse(null);
+        if (usuario == null) {
+            return;
+        }
 
         String code = String.format("%06d", random.nextInt(999999));
         String hashedCode = passwordEncoder.encode(code);
@@ -51,10 +55,9 @@ public class SenhaResetService {
     public boolean validarToken(String email, String code) {
         List<SenhaResetToken> tokens = senhaResetTokenRepository.findByUsuarioEmailUsuarioAndUsedFalseOrderByCreatedAtDesc(email);
         for (SenhaResetToken t : tokens){
+            // Confere todos os códigos ainda válidos (antes só o mais recente era olhado).
             if (t.getExpiresAt().isAfter(Instant.now()) && passwordEncoder.matches(code, t.getTokenHash())) {
                 return true;
-            }else{
-                return false;
             }
         }
         return false;
@@ -62,6 +65,9 @@ public class SenhaResetService {
 
     @Transactional
     public void resetarSenha(String email, String code, String novaSenha) {
+        if (novaSenha == null || novaSenha.length() < 6) {
+            throw new IllegalArgumentException("A nova senha deve ter pelo menos 6 caracteres.");
+        }
         List<SenhaResetToken> tokens = senhaResetTokenRepository.findByUsuarioEmailUsuarioAndUsedFalseOrderByCreatedAtDesc(email);
         for (SenhaResetToken t : tokens){
             if (t.getExpiresAt().isAfter(Instant.now()) && passwordEncoder.matches(code, t.getTokenHash())) {

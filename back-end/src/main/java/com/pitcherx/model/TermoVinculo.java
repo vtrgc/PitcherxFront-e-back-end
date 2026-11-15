@@ -24,4 +24,11 @@ public class TermoVinculo {
 
     @Column(name = "descricao_termo_vinculo", nullable = false)
     private String descricaoTermoVinculo;
+
+    @ManyToOne
+    @JoinColumn(name = "projeto_id")
+    private Projeto projeto;
+
+    @Column(name = "obrigatorio", nullable = false)
+    private Boolean obrigatorio = false;
 }

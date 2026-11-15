@@ -40,4 +40,11 @@ public class Contrato {
     @JoinColumn(name = "id_projeto", nullable = false)
     private Projeto projeto;
 
+    @ManyToOne
+    @JoinColumn(name = "id_proposta")
+    private Proposta proposta;
+
+    @Column(name = "status_contrato")
+    private String statusContrato = "PENDENTE";
+
 }

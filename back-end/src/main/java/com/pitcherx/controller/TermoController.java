@@ -61,5 +61,13 @@ public class TermoController {
         termoService.deletarTermo(id);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
+    
+    @GetMapping("/contrato/{contratoId}")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Listar Termos por Contrato", description = "Retorna todos os termos de um contrato específico baseado no ID")
+    public ResponseEntity<List<TermoResponseDTO>> getTermosByContrato(@PathVariable Long contratoId){
+        List<TermoResponseDTO> termos = termoService.listarTermosByContrato(contratoId);
+        return ResponseEntity.status(HttpStatus.OK).body(termos);
+    }
 
 }

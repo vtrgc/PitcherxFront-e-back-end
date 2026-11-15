@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="https://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Identidade reprovada - PitcherX</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #dc2626; color: white; padding: 20px; text-align: center; }
+        .content { background-color: #f9f9f9; padding: 20px; border-radius: 5px; }
+        .footer { font-size: 12px; color: #777; text-align: center; padding: 20px; }
+        .button { display: inline-block; background-color: #4a90e2; color: white; padding: 10px 20px; 
+                   text-decoration: none; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Identidade reprovada</h2>
+        </div>
+        <div class="content">
+            <p>Olá <strong th:text="${nome}">Nome</strong>,</p>
+            <p>Não foi possível aprovar a sua identidade com o comprovante enviado.</p>
+            <p><strong>Motivo:</strong> <span th:text="${justificativa}">Motivo</span></p>
+            <p>Você pode enviar um novo comprovante (até 5 tentativas). Use uma foto nítida de um documento com foto válido.</p>
+            <p>Atenciosamente,<br/>Equipe PitcherX</p>
+        </div>
+        <div class="footer">
+            <p>&copy; <span th:text="${ano}">2026</span> PitcherX. Este é um e-mail automático, não responda.</p>
+        </div>
+    </div>
+</body>
+</html>

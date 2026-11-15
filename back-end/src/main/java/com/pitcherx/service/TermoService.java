@@ -80,4 +80,12 @@ public class TermoService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public List<TermoResponseDTO> listarTermosByContrato(Long contratoId){
+        List<Termo> termos = termoRepository.findByContrato_IdContrato(contratoId);
+        return termos.stream()
+                .map(termoMapper::toDTO)
+                .toList();
+    }
+
 }

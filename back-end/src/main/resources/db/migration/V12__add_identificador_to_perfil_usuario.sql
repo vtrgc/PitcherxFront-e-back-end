@@ -1,1 +1,1 @@
-ALTER TABLE perfil_usuario ADD COLUMN identificador VARCHAR(18) NOT NULL;
+ALTER TABLE perfil_usuario ADD COLUMN identificador VARCHAR(18);

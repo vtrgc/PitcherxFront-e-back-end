@@ -12,7 +12,9 @@ public record PostagemResponseDTO(
 		@JsonFormat(pattern = "dd/MM/yyyy")
 		LocalDate dataPostagem,
 		String urlImagemPostagem,
+		String urlVideoPostagem,
 		List<String> imagens,
+		List<String> videos,
 		Long usuarioId
 		) {
 

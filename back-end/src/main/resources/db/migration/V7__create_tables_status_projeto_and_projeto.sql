@@ -6,6 +6,9 @@ CREATE TABLE projeto(
 	data_fim_projeto DATE NOT NULL,
 	is_active_projeto BOOLEAN NOT NULL DEFAULT TRUE,
 	url_imagem_projeto VARCHAR(155),
+	meta_financeira DOUBLE PRECISION NOT NULL,
+	valor_arrecadado DOUBLE PRECISION,
+	risco_projeto VARCHAR(255),
 	tipo_projeto_id BIGINT NOT NULL,
 	FOREIGN KEY (tipo_projeto_id) REFERENCES tipo_projeto(id_tipo_projeto)
 	ON DELETE CASCADE ON UPDATE CASCADE

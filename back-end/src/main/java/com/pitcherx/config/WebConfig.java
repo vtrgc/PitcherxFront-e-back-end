@@ -23,6 +23,15 @@ public class WebConfig implements WebMvcConfigurer {
     @Value("${app.upload.base-path}")
     private String basePath;
 
+    @Value("${app.upload.video-dir}")
+    private String diretorioUploadVideos;
+
+    @Value("${app.upload.video-base-url}")
+    private String baseUrlVideos;
+
+    @Value("${app.upload.video-base-path}")
+    private String basePathVideos;
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         var alowedOrigins = corsOriginPatterns.split(",");
@@ -40,5 +49,11 @@ public class WebConfig implements WebMvcConfigurer {
 
         registry.addResourceHandler(basePath + "/**")
                 .addResourceLocations("file:" + diretorioAbsoluto + "/");
+
+        String diretorioAbsolutoVideos = Paths.get(diretorioUploadVideos)
+                .toAbsolutePath().normalize().toString();
+
+        registry.addResourceHandler(basePathVideos + "/**")
+                .addResourceLocations("file:" + diretorioAbsolutoVideos + "/");
     }
 }

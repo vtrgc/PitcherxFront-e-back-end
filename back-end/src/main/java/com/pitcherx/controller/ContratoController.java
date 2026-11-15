@@ -39,15 +39,23 @@ public class ContratoController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','USUARIO','EMPRESARIO')")
+    @PreAuthorize("hasAnyRole('ADMIN','USUARIO','EMPRESA')")
     @Operation(summary = "Criar contrato", description = "Cria um novo contrato com os dados fornecidos.")
     public ResponseEntity<ContratoResponseDTO> createContrato(@Valid @RequestBody ContratoRequestDTO contratoRequestDTO){
         ContratoResponseDTO contratoResponseDTO = contratoService.criarContrato(contratoRequestDTO);
         return ResponseEntity.status(HttpStatus.CREATED).body(contratoResponseDTO);
     }
 
+    @PutMapping("/{id}/aceitar")
+    @PreAuthorize("hasAnyRole('ADMIN','USUARIO','EMPRESA')")
+    @Operation(summary = "Aceitar contrato", description = "Aceite do contrato pelo autor da proposta (ou admin). O valor entra no arrecadado quando a proposta é aceita.")
+    public ResponseEntity<ContratoResponseDTO> aceitarContrato(@PathVariable Long id){
+        ContratoResponseDTO contratoResponseDTO = contratoService.aceitarContrato(id);
+        return ResponseEntity.status(HttpStatus.OK).body(contratoResponseDTO);
+    }
+
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','USUARIO','EMPRESARIO')")
+    @PreAuthorize("hasAnyRole('ADMIN','USUARIO','EMPRESA')")
     @Operation(summary = "Atualizar contrato", description = "Atualiza os dados de um contrato específico com base no ID fornecido.")
     public ResponseEntity<ContratoResponseDTO> updateContrato(@PathVariable Long id, @Valid @RequestBody ContratoRequestDTO contratoRequestDTO){
         ContratoResponseDTO contratoResponseDTO = contratoService.atualizarContrato(id, contratoRequestDTO);
@@ -55,7 +63,7 @@ public class ContratoController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','USUARIO','EMPRESARIO')")
+    @PreAuthorize("hasAnyRole('ADMIN','USUARIO','EMPRESA')")
     @Operation(summary = "Deletar contrato", description = "Deleta um contrato específico com base no ID fornecido.")
     public ResponseEntity<Void> deleteContrato(@PathVariable Long id) {
         contratoService.deletarContrato(id);

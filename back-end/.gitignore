@@ -51,5 +51,9 @@ docker-compose.*.yml
 ## Environment Files ###
 .env
 
-## Files and Directories ##
+## IA and Machine Learning ##
 /uploads/
+.agents/
+AGENTS.md
+skills-lock.json
+CHANGES.md

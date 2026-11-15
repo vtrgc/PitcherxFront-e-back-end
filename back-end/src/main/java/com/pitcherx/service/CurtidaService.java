@@ -1,5 +1,8 @@
 package com.pitcherx.service;
 
+import com.pitcherx.security.Permissoes;
+import jakarta.persistence.EntityNotFoundException;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.pitcherx.model.Curtida;
 import com.pitcherx.model.TipoConteudo;
 import com.pitcherx.model.Usuario;
@@ -19,6 +22,9 @@ public class CurtidaService {
     private final CurtidaRepository curtidaRepository;
     private final UsuarioRepository usuarioRepository;
     private final TipoConteudoRepository tipoConteudoRepository;
+
+    @Autowired
+    private Permissoes permissoes;
 
     public CurtidaService(CurtidaRepository curtidaRepository,
                           UsuarioRepository usuarioRepository, TipoConteudoRepository tipoConteudoRepository){
@@ -53,6 +59,7 @@ public class CurtidaService {
 
     @Transactional
     public Long curtirConteudo(Long usuarioId, Long tipoConteudoId, Long conteudoId){
+        permissoes.exigirProprio(usuarioId, "Você só pode curtir em seu próprio nome.");
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RuntimeException("Sem usuario com o ID informado!"));
@@ -78,9 +85,9 @@ public class CurtidaService {
     //metodo de remoção de curtida básico, vou fazer um com verificação de usuário, tipo de conteudo e conteudo depois
     @Transactional
     public void deletarCurtida(Long idCurtida){
-        if(!curtidaRepository.existsById(idCurtida)){
-            throw new RuntimeException("Sem curtida com o ID informado!");
-        }
+        Curtida existente = curtidaRepository.findById(idCurtida)
+                .orElseThrow(() -> new EntityNotFoundException("Sem curtida com o ID informado!"));
+        permissoes.exigirProprioOuAdmin(existente.getUsuario().getIdUsuario(), "Você só pode remover as suas curtidas.");
         try {
             curtidaRepository.deleteById(idCurtida);
         } catch (DataIntegrityViolationException e) {
@@ -90,14 +97,15 @@ public class CurtidaService {
 
     @Transactional
     public void removerCurtidaPorUsuarioConteudo(Long usuarioId, Long tipoConteudoId, Long conteudoId) {
+        permissoes.exigirProprio(usuarioId, "Você só pode remover as suas curtidas.");
         usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new RuntimeException("Sem usuario com o ID informado!"));
+                .orElseThrow(() -> new EntityNotFoundException("Sem usuario com o ID informado!"));
 
         tipoConteudoRepository.findById(tipoConteudoId)
-                .orElseThrow(() -> new RuntimeException("Sem tipo de conteudo com o ID informado!"));
+                .orElseThrow(() -> new EntityNotFoundException("Sem tipo de conteudo com o ID informado!"));
 
         Curtida curtida = curtidaRepository.findByUsuario_IdUsuarioAndTipoConteudo_IdTipoConteudoAndConteudoId(usuarioId, tipoConteudoId, conteudoId)
-                .orElseThrow(() -> new RuntimeException("Curtida não encontrada para o usuário e conteúdo informados!"));
+                .orElseThrow(() -> new EntityNotFoundException("Curtida não encontrada para o usuário e conteúdo informados!"));
 
         curtidaRepository.delete(curtida);
     }

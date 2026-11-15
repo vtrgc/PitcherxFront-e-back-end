@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="https://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Solicitação Recusada - PitcherX</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #e24a4a; color: white; padding: 20px; text-align: center; }
+        .content { background-color: #f9f9f9; padding: 20px; border-radius: 5px; }
+        .footer { font-size: 12px; color: #777; text-align: center; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Solicitação Recusada</h2>
+        </div>
+        <div class="content">
+            <p>Olá <strong th:text="${nomeSolicitante}">Nome do Solicitante</strong>,</p>
+            <p>Infelizmente, sua solicitação para se tornar vínculo no projeto <strong th:text="${nomeProjeto}">Nome do Projeto</strong> foi <strong>recusada</strong> pelo criador <strong th:text="${nomeCriador}">Nome do Criador</strong>.</p>
+            <p>Você pode entrar em contato diretamente com o criador para discutir outras oportunidades ou tentar novamente no futuro.</p>
+            <p>Atenciosamente,<br/>Equipe PitcherX</p>
+        </div>
+        <div class="footer">
+            <p>© ${ano} PitcherX. Todos os direitos reservados.</p>
+        </div>
+    </div>
+</body>
+</html>

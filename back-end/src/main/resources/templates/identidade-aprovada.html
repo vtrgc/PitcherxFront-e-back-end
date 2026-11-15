@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="https://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Identidade aprovada - PitcherX</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #16a34a; color: white; padding: 20px; text-align: center; }
+        .content { background-color: #f9f9f9; padding: 20px; border-radius: 5px; }
+        .footer { font-size: 12px; color: #777; text-align: center; padding: 20px; }
+        .button { display: inline-block; background-color: #4a90e2; color: white; padding: 10px 20px; 
+                   text-decoration: none; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Identidade aprovada</h2>
+        </div>
+        <div class="content">
+            <p>Olá <strong th:text="${nome}">Nome</strong>,</p>
+            <p>Conferimos o seu comprovante e a sua identidade foi <strong>aprovada</strong>. Sua conta está ativa e você já pode entrar na PitcherX.</p>
+            <p>Complete o seu perfil profissional para aparecer nas buscas e receber recomendações de projetos.</p>
+            <p>Atenciosamente,<br/>Equipe PitcherX</p>
+        </div>
+        <div class="footer">
+            <p>&copy; <span th:text="${ano}">2026</span> PitcherX. Este é um e-mail automático, não responda.</p>
+        </div>
+    </div>
+</body>
+</html>

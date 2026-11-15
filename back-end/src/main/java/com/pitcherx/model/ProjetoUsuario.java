@@ -38,4 +38,9 @@ public class ProjetoUsuario {
     @CreationTimestamp
     private LocalDateTime dataVinculo;
 
+    @Column(name = "aceitou_termos", nullable = false)
+    private Boolean aceitouTermos = false;
+
+    @Column(name = "data_aceite")
+    private LocalDateTime dataAceite;
 }

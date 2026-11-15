@@ -81,4 +81,22 @@ public class PerfilUsuarioController {
 		perfilUsuarioService.removerBanner(id, usuario);
 		return ResponseEntity.noContent().build();
 	}
+
+	@PostMapping(value = "/{id}/video", consumes = "multipart/form-data")
+	@PreAuthorize("hasAnyRole('ADMIN', 'USUARIO', 'EMPRESA')")
+	@Operation(description = "Endpoint para atualizar o video do perfil")
+	public ResponseEntity<PerfilUsuarioResponseDTO> atualizarVideo(
+			@PathVariable Long id,
+			@RequestParam("arquivo") MultipartFile arquivo,
+			@AuthenticationPrincipal Usuario usuario) {
+		return ResponseEntity.ok(perfilUsuarioService.atualizarVideo(id, usuario, arquivo));
+	}
+
+	@DeleteMapping("/{id}/video")
+	@PreAuthorize("hasAnyRole('ADMIN', 'USUARIO', 'EMPRESA')")
+	@Operation(description = "Endpoint para remover o video do perfil")
+	public ResponseEntity<Void> removerVideo(@PathVariable Long id, @AuthenticationPrincipal Usuario usuario) {
+		perfilUsuarioService.removerVideo(id, usuario);
+		return ResponseEntity.noContent().build();
+	}
 }

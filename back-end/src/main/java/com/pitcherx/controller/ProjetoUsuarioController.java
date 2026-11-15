@@ -45,28 +45,6 @@ public class ProjetoUsuarioController {
         return ResponseEntity.status(HttpStatus.OK).body(projetoUsuarioService.buscarPorId(id));
     }
 
-    @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'USUARIO', 'EMPRESA')")
-    @Operation(description = "Endpoint para vincular um usuário a um projeto")
-    public ResponseEntity<ProjetoUsuarioResponseDTO> create(@Valid @RequestBody ProjetoUsuarioRequestDTO dto) {
-        ProjetoUsuarioResponseDTO projetoUsuarioResponseDTO = projetoUsuarioService.criarVinculo(dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(projetoUsuarioResponseDTO);
-    }
-
-    @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USUARIO', 'EMPRESA')")
-    @Operation(description = "Endpoint para atualizar um vínculo entre projeto e usuário")
-    public ResponseEntity<ProjetoUsuarioResponseDTO> update(@PathVariable Long id, @Valid @RequestBody ProjetoUsuarioRequestDTO dto) {
-        ProjetoUsuarioResponseDTO projetoUsuarioResponseDTO = projetoUsuarioService.atualizarVinculo(id, dto);
-        return ResponseEntity.status(HttpStatus.OK).body(projetoUsuarioResponseDTO);
-    }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'USUARIO', 'EMPRESA')")
-    @Operation(description = "Endpoint para remover um vínculo entre projeto e usuário")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        projetoUsuarioService.deletarVinculo(id);
-        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
-    }
-
+    // POST removido: vinculações agora são feitas via solicitações de vínculo (SolicitacaoVinculoController)
+    // ou automaticamente ao aceitar termos (TermoVinculoController) ou criar projeto (ProjetoController)
 }

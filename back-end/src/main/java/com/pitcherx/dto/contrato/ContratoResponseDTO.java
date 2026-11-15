@@ -9,7 +9,9 @@ public record ContratoResponseDTO(
         LocalDateTime dataInicioContrato,
         LocalDateTime dataFimContrato,
         Boolean active,
-        Long projetoId
+        Long projetoId,
+        Long propostaId,
+        String statusContrato
 ) {
 
 }

@@ -9,7 +9,8 @@ public record ContratoRequestDTO(
         @NotBlank(message = "A descrição do contrato é obrigatória!") String descricaoContrato,
         @NotNull(message = "A data de início é obrigatória!") LocalDateTime dataInicioContrato,
         @NotNull(message = "A data de fim é obrigatória!") LocalDateTime dataFimContrato,
-        @NotNull(message = "O id do projeto é obrigatório!") Long projetoId
+        @NotNull(message = "O id do projeto é obrigatório!") Long projetoId,
+        @NotNull(message = "O ID da proposta é obrigatório!") Long propostaId
 ) {
 
 }

@@ -35,7 +35,7 @@ public class DataInitializer {
 				for (RoleType tipo : RoleType.values()) {
 					roleRepository.save(new Role(tipo));
 				}
-				IO.println("Roles adicionadas ao banco de dados.");
+				System.out.println("Roles adicionadas ao banco de dados.");
 			}
 
 			if (tipoVinculoRepository.count() == 0) {
@@ -45,7 +45,7 @@ public class DataInitializer {
 					tipoVinculo.setNomeTipoVinculo(tpVinculo);
 					tipoVinculoRepository.save(tipoVinculo);
 				}
-				IO.println("Tipos de vinculo adicionadas ao banco de dados.");
+				System.out.println("Tipos de vinculo adicionadas ao banco de dados.");
 			}
 
 			if (!usuarioRepository.existsUsuarioByEmailUsuario("adm@gmail.com")) {
@@ -54,13 +54,14 @@ public class DataInitializer {
 				admin.setEmailUsuario("adm@gmail.com");
 				String senhaHash = passwordEncoder.encode("adm1234567");
 				admin.setSenhaUsuario(senhaHash);
+				admin.setActive(true);
 
 				Role role = roleRepository.findRoleByNomeRole(RoleType.ADMIN)
 						.orElseThrow(() -> new RuntimeException("Sem role com o nome informado!"));
 
 				admin.setRoles(Set.of(role));
 				usuarioRepository.save(admin);
-				IO.println("Admin inicial adicionado ao banco de dados.");
+				System.out.println("Admin inicial adicionado ao banco de dados.");
 			}
 
 			if (tipoConteudoRepository.count()==0){
@@ -69,7 +70,7 @@ public class DataInitializer {
 					tipoConteudo.setNomeTipoConteudo(tpConteudo);
 					tipoConteudoRepository.save(tipoConteudo);
 				}
-				IO.println("Tipos de conteudo adicionadas ao banco de dados.");
+				System.out.println("Tipos de conteudo adicionadas ao banco de dados.");
 			}
 		};
 	}

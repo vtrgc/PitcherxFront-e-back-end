@@ -10,11 +10,15 @@ import org.mapstruct.MappingTarget;
 @Mapper(componentModel = "spring")
 public interface TermoVinculoMapper {
 
+    @Mapping(source = "projeto.idProjeto", target = "projetoId")
     TermoVinculoResponseDTO toDTO(TermoVinculo termoVinculo);
 
     @Mapping(target = "idTermoVinculo", ignore = true)
+    @Mapping(target = "projeto", ignore = true)
     TermoVinculo toEntity(TermoVinculoRequestDTO termoVinculoRequestDTO);
 
+    @Mapping(target = "idTermoVinculo", ignore = true)
+    @Mapping(target = "projeto", ignore = true)
     void updateFromDTO(TermoVinculoRequestDTO termoVinculoRequestDTO, @MappingTarget TermoVinculo termoVinculo);
 
 }

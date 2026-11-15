@@ -9,6 +9,8 @@ public record ProjetoUsuarioResponseDTO(
         String nomeUsuario,
         Long tipoVinculoId,
         String nomeTipoVinculo,
-        LocalDateTime dataVinculo
+        LocalDateTime dataVinculo,
+        Boolean aceitouTermos,
+        LocalDateTime dataAceite
 ) {
 }

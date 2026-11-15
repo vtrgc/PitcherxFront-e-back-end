@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ProjetoUsuarioRepository extends JpaRepository<ProjetoUsuario, Long> {
@@ -19,4 +20,9 @@ public interface ProjetoUsuarioRepository extends JpaRepository<ProjetoUsuario, 
 
     boolean existsByUsuario_IdUsuarioAndProjeto_IdProjetoAndTipoVinculo_IdTipoVinculo(Long usuarioId, Long projetoId, Long tipoVinculoId);
 
+    Optional<ProjetoUsuario> findByProjeto_IdProjetoAndUsuario_IdUsuario(Long projetoId, Long usuarioId);
+
+    Optional<ProjetoUsuario> findByProjeto_IdProjetoAndUsuario_IdUsuarioAndTipoVinculo_NomeTipoVinculo(Long projetoId, Long usuarioId, String nomeTipoVinculo);
+
+    boolean existsByUsuario_IdUsuarioAndTipoVinculo_NomeTipoVinculoIn(Long usuarioId, List<String> nomesTipoVinculo);
 }

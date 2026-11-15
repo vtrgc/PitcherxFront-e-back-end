@@ -1,6 +1,7 @@
 package com.pitcherx.dto.projeto;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -27,7 +28,23 @@ public record ProjetoRequestDTO(
 		LocalDate dataFimProjeto,
 		
 		@NotNull(message = "O tipo de projeto é obrigatório!") Long tipoProjetoId,
-		String urlImagemProjeto
+		
+		@NotNull(message = "A meta financeira é obrigatória!") Double metaFinanceira,
+		
+		Double valorArrecadado,
+		
+		@NotNull(message = "O investimento mínimo é obrigatório!") Double investimentoMinimo,
+		
+		@NotNull(message = "A participação oferecida é obrigatória!") Integer participacaoOferecida,
+		
+		String usoRecursos,
+		
+		String urlImagemProjeto,
+		String urlVideoProjeto,
+		List<String> imagens,
+		List<String> videos,
+		
+		@NotNull(message = "A lista de riscos do projeto é obrigatória!") List<@NotNull Long> riscoProjetoIds
 		) {
 
 }

@@ -8,6 +8,7 @@ public record PerfilUsuarioResponseDTO(
 		String linkedin,
 		String identificador,
 		String urlBanner,
+		String urlVideoPerfil,
 		Especialidade especialidade,
 		UsuarioSimples usuario
 		) {

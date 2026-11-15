@@ -34,6 +34,9 @@ public class Postagem {
 	
 	@Column(name = "url_imagem_postagem", nullable = true)
 	private String urlImagemPostagem;
+
+	@Column(name = "url_video_postagem", nullable = true)
+	private String urlVideoPostagem;
 	
 	@ManyToOne
 	@JoinColumn(name = "usuario_id", nullable = false)
@@ -42,4 +45,8 @@ public class Postagem {
 	@OneToMany(mappedBy = "postagem", cascade = CascadeType.ALL, orphanRemoval = true)
 	@OrderBy("ordem ASC")
 	private List<PostagemImagem> imagens = new ArrayList<>();
+
+	@OneToMany(mappedBy = "postagem", cascade = CascadeType.ALL, orphanRemoval = true)
+	@OrderBy("ordem ASC")
+	private List<PostagemVideo> videos = new ArrayList<>();
 }

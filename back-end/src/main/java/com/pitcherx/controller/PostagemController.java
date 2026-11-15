@@ -84,6 +84,24 @@ public class PostagemController {
 		postagemService.removerImagens(id, usuario);
 		return ResponseEntity.noContent().build();
 	}
+
+	@PutMapping(value = "/{id}/videos", consumes = "multipart/form-data")
+	@Operation(summary = "Substituir videos da postagem", description = "Envia de 1 a 10 videos em ordem para substituir a galeria.")
+	@PreAuthorize("hasAnyRole('USUARIO', 'EMPRESA', 'ADMIN')")
+	public ResponseEntity<PostagemResponseDTO> substituirVideos(
+			@PathVariable Long id,
+			@RequestParam("arquivos") List<MultipartFile> arquivos,
+			@AuthenticationPrincipal Usuario usuario) {
+		return ResponseEntity.ok(postagemService.substituirVideos(id, usuario, arquivos));
+	}
+
+	@DeleteMapping("/{id}/videos")
+	@Operation(summary = "Remover videos da postagem", description = "Remove todos os videos da galeria.")
+	@PreAuthorize("hasAnyRole('USUARIO', 'EMPRESA', 'ADMIN')")
+	public ResponseEntity<Void> removerVideos(@PathVariable Long id, @AuthenticationPrincipal Usuario usuario) {
+		postagemService.removerVideos(id, usuario);
+		return ResponseEntity.noContent().build();
+	}
 	
 	@DeleteMapping("/{id}")
 	@Operation(summary = "Deletar postagem", description = "Deleta uma postagem existente com base no ID fornecido.")

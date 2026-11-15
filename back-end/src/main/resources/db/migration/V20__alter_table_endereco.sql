@@ -7,7 +7,6 @@ ALTER TABLE endereco RENAME COLUMN rua_endereco TO logradouro;
 ALTER TABLE endereco RENAME COLUMN numero_endereco TO numero_casa;
 
 ALTER TABLE endereco
-    ALTER COLUMN uf SET NOT NULL,
     ALTER COLUMN bairro SET NOT NULL,
     ALTER COLUMN logradouro SET NOT NULL,
     ALTER COLUMN numero_casa SET NOT NULL;

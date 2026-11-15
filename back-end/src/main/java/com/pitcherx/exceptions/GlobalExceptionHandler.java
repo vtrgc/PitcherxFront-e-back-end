@@ -19,7 +19,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import com.pitcherx.security.JwtAuthenticationException;
+
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -151,6 +154,23 @@ public class GlobalExceptionHandler {
                 ex.getName(), ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "válido");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(buildErrorResponse(message, HttpStatus.BAD_REQUEST.value()));
+    }
+
+    @ExceptionHandler(JwtAuthenticationException.class)
+    public ResponseEntity<Map<String, Object>> handleJwtAuthenticationException(JwtAuthenticationException ex, WebRequest request) {
+        logger.warn("Erro de autenticação JWT: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(buildErrorResponse(ex.getMessage(), HttpStatus.UNAUTHORIZED.value()));
+    }
+
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<Map<String, Object>> handleBusinessException(BusinessException ex, WebRequest request) {
+        logger.warn("Erro de regra de negócio: {} (code: {})", ex.getMessage(), ex.getErrorCode());
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("message", ex.getMessage());
+        errorResponse.put("errorCode", ex.getErrorCode());
+        errorResponse.put("timestamp", LocalDateTime.now());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
 
     @ExceptionHandler(Exception.class)

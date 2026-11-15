@@ -49,8 +49,17 @@ public class Usuario implements UserDetails {
     @Column(name = "url_imagem_usuario")
     private String urlImagemUsuario;
 
+    @Column(name = "url_video_usuario")
+    private String urlVideoUsuario;
+
+    @Column(name = "codigo_verificacao_usuario")
+    private String codigoVerificacao;
+
+    @Column(name = "verificado_usuario")
+    private Boolean verificado = false;
+
     @Column(name = "is_active_usuario", nullable = false)
-    private Boolean active = true;
+    private Boolean active = false;
     
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -67,6 +76,19 @@ public class Usuario implements UserDetails {
     @Column(name = "data_atualizacao_usuario", nullable = false)
     @UpdateTimestamp
     private LocalDateTime dataAtualizacaoUsuario;
+
+    @Column(name = "url_comprovante_identidade", length = 500)
+    private String urlComprovanteIdentidade;
+
+    @Column(name = "status_analise_identidade", nullable = false, length = 30)
+    private String statusAnaliseIdentidade = "PENDENTE";
+
+    @Column(name = "tentativas_identidade", nullable = false)
+    private Integer tentativasIdentidade = 0;
+
+    @ManyToOne
+    @JoinColumn(name = "nivel_conta_id")
+    private NivelConta nivelConta;
 
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ProjetoUsuario> projetos = new ArrayList<>();
@@ -109,5 +131,9 @@ public class Usuario implements UserDetails {
     @Override
     public boolean isEnabled() {
         return this.active != null && this.active;
+    }
+
+    public boolean isVerificado() {
+        return this.verificado != null && this.verificado;
     }
 }

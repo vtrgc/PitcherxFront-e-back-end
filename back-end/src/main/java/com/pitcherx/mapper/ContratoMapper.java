@@ -11,10 +11,19 @@ import org.mapstruct.MappingTarget;
 public interface ContratoMapper {
 
     @Mapping(source = "projeto.idProjeto", target = "projetoId")
+    @Mapping(source = "proposta.idProposta", target = "propostaId")
     ContratoResponseDTO toDTO(Contrato contrato);
 
     @Mapping(target = "idContrato", ignore = true)
+    @Mapping(target = "projeto", ignore = true)
+    @Mapping(target = "proposta", ignore = true)
     Contrato toEntity(ContratoRequestDTO contratoRequestDTO);
 
+    @Mapping(target = "idContrato", ignore = true)
+    @Mapping(target = "projeto", ignore = true)
+    @Mapping(target = "proposta", ignore = true)
+    @Mapping(target = "statusContrato", ignore = true)
+    @Mapping(target = "active", ignore = true)
     void toUpdate(ContratoRequestDTO contratoRequestDTO, @MappingTarget Contrato contrato);
+
 }
