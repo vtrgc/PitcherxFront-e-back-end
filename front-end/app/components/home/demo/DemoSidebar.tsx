@@ -11,7 +11,7 @@ const ITENS = [
   { label: "Contratos", icon: FileSignature, chave: "contratos" },
   { label: "Criar publicação", icon: PlusSquare, chave: "criar" },
   { label: "Mensagens", icon: MessageCircle, chave: "mensagens" },
-  { label: "Notificações", icon: Bell, chave: "notificacoes", emBreve: true },
+  { label: "Notificações", icon: Bell, chave: "notificacoes" },
   { label: "Perfil", icon: User, chave: "perfil" },
   { label: "Configurações", icon: Settings, chave: "configuracoes" },
 ];
@@ -34,15 +34,10 @@ export default function DemoSidebar({ ativo }: { ativo: string }) {
         </span>
       </div>
       <nav className="relative flex flex-1 flex-col gap-0.5 px-3 pb-3">
-        {ITENS.map(({ label, icon: Icon, chave, emBreve }) => (
+        {ITENS.map(({ label, icon: Icon, chave }) => (
           <span key={chave} className={ativo === chave ? ATIVO : BASE}>
             <Icon size={18} strokeWidth={ativo === chave ? 2.25 : 1.75} className="shrink-0" aria-hidden="true" />
             <span className="truncate">{label}</span>
-            {emBreve && (
-              <span className="ml-auto shrink-0 rounded-full bg-ink-50 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-400">
-                Em breve
-              </span>
-            )}
           </span>
         ))}
       </nav>
