@@ -34,6 +34,17 @@ public interface ConexaoRepository extends JpaRepository<Conexao, Long> {
                                                    @Param("status") StatusConexao status,
                                                    Pageable pageable);
 
+    /** [seguidorId, seguidoId, status] das conexões entre duas pessoas, nos dois sentidos (regra das mensagens). */
+    @Query("SELECT c.seguidor.idUsuario, c.seguido.idUsuario, c.status FROM Conexao c "
+            + "WHERE (c.seguidor.idUsuario = :umId AND c.seguido.idUsuario = :outroId) "
+            + "OR (c.seguidor.idUsuario = :outroId AND c.seguido.idUsuario = :umId)")
+    List<Object[]> vinculosEntre(@Param("umId") Long umId, @Param("outroId") Long outroId);
+
+    /** [seguidorId, seguidoId, status] de todas as conexões de um usuário (lista de conversas). */
+    @Query("SELECT c.seguidor.idUsuario, c.seguido.idUsuario, c.status FROM Conexao c "
+            + "WHERE c.seguidor.idUsuario = :usuarioId OR c.seguido.idUsuario = :usuarioId")
+    List<Object[]> vinculosDoUsuario(@Param("usuarioId") Long usuarioId);
+
     /** Usado na exclusão de conta (as duas direções). */
     @Modifying
     @Query("DELETE FROM Conexao c WHERE c.seguidor.idUsuario = :usuarioId OR c.seguido.idUsuario = :usuarioId")

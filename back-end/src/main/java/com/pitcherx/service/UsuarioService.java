@@ -83,6 +83,10 @@ public class UsuarioService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.pitcherx.repository.ConexaoRepository conexaoRepository;
     @org.springframework.beans.factory.annotation.Autowired
+    private com.pitcherx.repository.MensagemRepository mensagemRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.pitcherx.repository.ConversaRepository conversaRepository;
+    @org.springframework.beans.factory.annotation.Autowired
     private com.pitcherx.repository.CurtidaRepository curtidaRepository;
     @org.springframework.beans.factory.annotation.Autowired
     private com.pitcherx.repository.SenhaResetTokenRepository senhaResetTokenRepository;
@@ -241,6 +245,9 @@ public class UsuarioService {
         // "identidade aprovada" (que toda conta ativa recebe) impedia a exclusão: o erro só
         // surgia no commit e virava 500.
         notificacaoRepository.apagarDoUsuario(idUsuario);
+        // Conversas privadas da conta (as mensagens primeiro, por causa da chave estrangeira).
+        mensagemRepository.apagarDasConversasDoUsuario(idUsuario);
+        conversaRepository.apagarDoUsuario(idUsuario);
         conexaoRepository.apagarDoUsuario(idUsuario);
         curtidaRepository.apagarDoUsuario(idUsuario);
         senhaResetTokenRepository.apagarDoUsuario(idUsuario);

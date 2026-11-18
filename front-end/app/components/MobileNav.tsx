@@ -3,14 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { House, Compass, Briefcase, User, ShieldCheck, Users, FileText, Menu, X, LogOut, Bell } from "lucide-react";
+import { House, Compass, Briefcase, User, ShieldCheck, Users, FileText, Menu, X, LogOut, Bell, MessageCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotificacoes } from "../context/NotificacoesContext";
+import { useMensagensNaoLidas } from "../context/MensagensContext";
 import { NAV_ADMIN, NAV_USUARIO, itemAtivo, textoContador } from "./navegacao";
 
 const ITENS_USUARIO = [
   { href: "/feed", label: "Início", icon: House },
   { href: "/explorar", label: "Explorar", icon: Compass },
+  { href: "/mensagens", label: "Mensagens", icon: MessageCircle },
   { href: "/notificacoes", label: "Notificações", icon: Bell },
   { href: "/perfil", label: "Perfil", icon: User },
 ];
@@ -28,6 +30,8 @@ export default function MobileNav() {
   const { isAdmin, logout } = useAuth();
   const { naoLidas } = useNotificacoes();
   const contador = textoContador(naoLidas);
+  const { naoLidas: mensagensNaoLidas } = useMensagensNaoLidas();
+  const contadorMensagens = textoContador(mensagensNaoLidas);
   const [menuAberto, setMenuAberto] = useState(false);
   const painelRef = useRef<HTMLDivElement>(null);
 
@@ -65,7 +69,8 @@ export default function MobileNav() {
             className="absolute inset-x-3 bottom-24 max-h-[70vh] overflow-y-auto rounded-2xl border border-ink-100 bg-white p-3 shadow-[0_20px_50px_-20px_rgba(21,15,40,0.45)]"
           >
             <ul className="grid grid-cols-2 gap-1">
-              {todos.map(({ href, label, icon: Icon, emBreve, contadorNotificacoes }) => {
+              {todos.map(({ href, label, icon: Icon, emBreve, contadorNotificacoes, contadorMensagens: comContadorMensagens }) => {
+                const numero = contadorNotificacoes ? contador : comContadorMensagens ? contadorMensagens : null;
                 const ativo = itemAtivo(pathname, href);
                 return (
                   <li key={href}>
@@ -80,9 +85,9 @@ export default function MobileNav() {
                       <Icon size={17} aria-hidden="true" className="shrink-0" />
                       <span className="truncate">{label}</span>
                       {emBreve && <span className="ml-auto text-[9px] font-bold uppercase text-ink-400">breve</span>}
-                      {contadorNotificacoes && contador && (
+                      {numero && (
                         <span className="ml-auto rounded-full bg-accent-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                          {contador}
+                          {numero}
                         </span>
                       )}
                     </Link>
@@ -110,7 +115,7 @@ export default function MobileNav() {
       >
         {itens.map(({ href, label, icon: Icon }) => {
           const ativo = itemAtivo(pathname, href);
-          const badge = href === "/notificacoes" ? contador : null;
+          const badge = href === "/notificacoes" ? contador : href === "/mensagens" ? contadorMensagens : null;
           return (
             <Link
               key={href}

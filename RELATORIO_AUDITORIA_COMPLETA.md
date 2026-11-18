@@ -38,8 +38,8 @@ Resultado: **198/198 sem nenhum desses problemas** — **APROVADO**.
 
 ## 2. Endpoints identificados e testados
 
-- **178 endpoints** identificados nos controllers (método + caminho), incluindo os novos: envio da foto de verificação sem login e reenvio do código de verificação.
-- **178/178 chamados** pelo roteiro de API, com **269 verificações** de resposta, regra de negócio, persistência no banco e permissão: **269 aprovadas, 0 reprovadas**.
+- **187 endpoints** identificados nos controllers (método + caminho), incluindo os novos: envio da foto de verificação sem login, reenvio do código de verificação e os 9 de mensagens privadas (seção 12).
+- **187/187 chamados** pelo roteiro de API, com **329 verificações** de resposta, regra de negócio, persistência no banco e permissão: **329 aprovadas, 0 reprovadas**.
 - O log do backend no fim da bateria tem **0 "Erro interno não tratado"** e **0 linhas de nível ERROR**. Os avisos que aparecem são as recusas provocadas de propósito pelos testes (403, senha errada, conta não ativada, validação).
 
 | Grupo | Verificações |
@@ -54,7 +54,8 @@ Resultado: **198/198 sem nenhum desses problemas** — **APROVADO**.
 | Denúncias e moderação | 9 |
 | Demais endpoints (leitura, edição e exclusão) | 44 |
 | Sessão e conta desativada | 4 |
-| **Total** | **269** |
+| Mensagens privadas (seção 12) | 60 |
+| **Total** | **329** |
 
 ## 3. Funcionalidades testadas
 
@@ -84,7 +85,7 @@ Todas foram testadas com operação real: requisição → resposta → banco �
 | Configurações | Trocar senha, link para os dados da conta | APROVADO |
 | Painel admin | Painel e as 18 telas de cadastro/moderação, cadastro de área e de termo de postagem pela tela | CORRIGIDO |
 | Excluir / desativar conta | Exclusão da própria conta, conta com conteúdo, desativação e reativação pelo admin | CORRIGIDO |
-| Mensagens | A página existe, mas o backend não tem esse recurso (ver item 7) | REPROVADO |
+| Mensagens privadas | Implementadas depois desta auditoria (seção 12): só entre conexões aceitas, com atualização automática, não lidas, leitura, edição, exclusão e telas para computador e celular | APROVADO |
 | Layout em computador, tablet e celular | Rolagem horizontal, elementos visíveis, fluxo de negociação no celular | APROVADO |
 
 ## 4. Erros encontrados
@@ -186,7 +187,6 @@ cadastro com verificação por e-mail, aprovação de identidade, login, logout,
 
 | Item | Situação | Status |
 | --- | --- | --- |
-| Mensagens | O backend não tem entidade nem endpoints de mensagens. A página informa isso de forma honesta e não simula conversas. Para funcionar, é preciso criar o recurso no backend. | REPROVADO |
 | CPF/CNPJ no perfil | O identificador do perfil continua visível em `GET /perfil-usuario` para usuários logados. Não foi ocultado nesta auditoria porque é preciso decidir quem pode ver esse dado (dono, admin, parceiros do projeto). | REPROVADO |
 | Login revela se o e-mail existe | Responde 404 para e-mail desconhecido e 400 para senha errada | REPROVADO |
 | Código de redefinição sem limite de tentativas | O código tem 6 dígitos e não há limite de tentativas nem de requisições | REPROVADO |
@@ -209,15 +209,16 @@ cadastro com verificação por e-mail, aprovação de identidade, login, logout,
 
 | Teste | Resultado | Status |
 | --- | --- | --- |
-| API ponta a ponta (`e2e/api_auditoria.py`) | 269/269 verificações, 178/178 endpoints | APROVADO |
+| API ponta a ponta (`e2e/api_auditoria.py`) | 329/329 verificações, 187/187 endpoints | APROVADO |
+| Mensagens no navegador (`e2e/mensagens_navegador.js`) | 46/46 (duas pessoas em navegadores separados, computador e celular) | APROVADO |
 | Navegador: páginas (`e2e/navegador_auditoria.js`) | 198/198 aberturas sem erros (49 rotas × perfis × 3 tamanhos) | APROVADO |
 | Navegador: fluxos (`e2e/navegador_auditoria.js`) | 40/40 aprovados (inclui os 7 do primeiro acesso com código), 1 não testado (imagens do Unsplash) | APROVADO |
 | Negociação no navegador (`e2e/negociacao_navegador.js`) | 51/51 (inclui o código no primeiro acesso das duas contas). Os únicos HTTP 400 foram os provocados de propósito: e-mail duplicado e login de conta inativa. | APROVADO |
-| Front: testes unitários (vitest) | 115/115 (inclui o envio da foto sem login e o reenvio do código) | APROVADO |
+| Front: testes unitários (vitest) | 122/122 (inclui foto sem login, reenvio do código e as funções de mensagens) | APROVADO |
 | Front: TypeScript (`tsc --noEmit`) | 0 erros | APROVADO |
 | Front: ESLint | 0 erros. Os 44 avisos já existiam antes da auditoria; nenhum aviso novo. | APROVADO |
-| Backend: `mvn test` | 24 testes, 0 falhas e 0 erros (19 que já existiam e 5 novos em `PermissoesTest`) | APROVADO |
-| Flyway | 46 migrações aplicadas num banco vazio; a `V46` também rodou no banco da auditoria, que já tinha dados (1 conta antiga marcada como verificada, 32 com código pendente mantidas) | APROVADO |
+| Backend: `mvn test` | 31 testes, 0 falhas e 0 erros (19 que já existiam, 5 em `PermissoesTest` e 7 da regra de mensagens em `SituacaoConexaoMensagemTest`) | APROVADO |
+| Flyway | 47 migrações aplicadas num banco vazio (a `V47` cria as tabelas de mensagens); a `V46` também rodou no banco da auditoria, que já tinha dados (1 conta antiga marcada como verificada, 32 com código pendente mantidas) | APROVADO |
 
 ## 10. Build do front e do backend
 
@@ -234,7 +235,39 @@ cadastro com verificação por e-mail, aprovação de identidade, login, logout,
 | `JWT_SECRET` | Definir como variável de ambiente do sistema em produção. Sem ela, o backend usa um segredo de desenvolvimento e mostra um aviso no log (veja `.env-exemple`). | NÃO TESTADO em produção |
 | SMTP real | Os e-mails foram testados com um SMTP local de teste. A entrega por um provedor real depende das credenciais de e-mail do servidor. | NÃO TESTADO |
 | Remetente dos e-mails | O endereço do remetente está fixo no `EmailService`. Ele precisa ser o mesmo da conta SMTP usada em produção. | NÃO TESTADO |
-| Migrações no banco de produção | Testadas num banco vazio e num banco de testes com dados, mas não no banco real. Antes de aplicar em produção, faça backup e rode `V43` a `V46` numa cópia (a `V45` troca a restrição única do título do termo de vínculo; a `V46` marca como verificadas as contas ativas sem código pendente). | NÃO TESTADO |
+| Migrações no banco de produção | Testadas num banco vazio e num banco de testes com dados, mas não no banco real. Antes de aplicar em produção, faça backup e rode `V43` a `V47` numa cópia (a `V45` troca a restrição única do título do termo de vínculo; a `V46` marca como verificadas as contas ativas sem código pendente; a `V47` só cria tabelas novas). | NÃO TESTADO |
 | Imagens do Unsplash | Dependem do acesso à internet do servidor e do navegador | NÃO TESTADO |
 | `BACKEND_URL` do front | Precisa apontar para o backend no ambiente de publicação | APROVADO (testado localmente) |
 | `FRONTEND_URL_1` do backend (CORS) | Precisa ser exatamente o endereço do site. Com outro endereço (por exemplo `127.0.0.1` em vez de `localhost`), o backend recusa o cadastro e as demais chamadas com "Você não tem permissão". | APROVADO (testado localmente) |
+
+## 12. Sistema de mensagens privadas
+
+Implementado depois da auditoria, no backend, no front e no banco. A regra principal é **só quem tem uma conexão aceita troca mensagens**. Ela é conferida no backend em todo envio e em toda edição, então não há como contorná-la chamando a API direto.
+
+| Peça | O que foi feito |
+| --- | --- |
+| Regra de conexão | Vale uma conexão `ACEITO` entre as duas pessoas, em qualquer sentido. Solicitação pendente, recusada ou removida bloqueia o envio (403) com a explicação do motivo. A regra fica numa função única (`SituacaoConexaoMensagem`), testada em todos os casos. |
+| Banco (`V47`) | Tabela `conversa` (uma por par de usuários, com restrição única e o par sempre em ordem) e tabela `mensagem` (remetente, data e hora de envio, lida e data da leitura, edição, exclusão lógica, data da última alteração e chave do cliente). Chaves estrangeiras com `ON DELETE CASCADE` e índices para histórico, não lidas e atualização incremental. Nenhum dado existente é alterado. |
+| Endpoints (`/mensagem`) | Listar conversas, buscar conversa, histórico (paginado, com "anteriores" e "o que mudou desde"), enviar, marcar como lida, contar não lidas, verificar permissão com uma pessoa, editar (só quem enviou, até 15 minutos, com a conexão ativa) e apagar (só quem enviou; o texto some para os dois). |
+| Segurança | O remetente vem sempre do token. Só os dois participantes acessam a conversa, nem o administrador lê. Mensagem vazia ou com mais de 2000 caracteres é recusada. Uma chave por envio impede mensagens duplicadas quando a requisição é repetida depois de uma falha de rede. |
+| Conexão removida | O histórico continua visível para os dois em modo somente leitura. Novas mensagens e edições ficam bloqueadas até existir de novo uma conexão aceita, e aí a mesma conversa é reaproveitada. |
+| Exclusão de conta | As conversas da conta são apagadas junto, e a exclusão continua funcionando. |
+| Atualização sem recarregar | Consulta incremental: a conversa aberta é atualizada a cada 3 s, a lista a cada 10 s e o contador da navegação a cada 30 s, sempre com a aba visível. Cada consulta busca só o que mudou desde a anterior: mensagens novas, lidas, editadas ou apagadas. Não usei WebSocket porque exigiria uma dependência nova no backend, e o front chama a API pelo proxy do Next, que não repassa WebSocket de forma confiável. |
+| Interface | Página no estilo do LinkedIn, com lista de conversas (foto, nome, prévia, horário e contador de não lidas) e a conversa (separador por dia, bolhas enviadas e recebidas, "Enviada"/"Vista", "editada", "Mensagem apagada"). O campo de envio aceita Enter para enviar e Shift+Enter para quebrar linha. Há rolagem automática com o aviso "Nova mensagem", estados de carregamento, vazio, erro e sem conexão, reenvio de mensagem que falhou e "Nova mensagem" listando só as conexões aceitas. No celular, a lista e a conversa ocupam a tela inteira, com botão de voltar. |
+| Integração | O perfil mostra "Enviar mensagem" só para conexões aceitas. Com a solicitação pendente, mostra um aviso de que é preciso aceitar a conexão. A navegação ganhou o item "Mensagens" com contador de não lidas, também na barra inferior do celular. |
+
+### Cenários obrigatórios
+
+| # | Cenário | Status |
+| --- | --- | --- |
+| 1 | A conectado a B consegue enviar | APROVADO |
+| 2 | Sem conexão, o envio é bloqueado (e nenhuma conversa é criada) | APROVADO |
+| 3 | Com a conexão pendente, nenhum dos dois envia | APROVADO |
+| 4 | Depois que B aceita, as mensagens são liberadas | APROVADO |
+| 5 | Depois que a conexão é removida, novas mensagens e edições são bloqueadas e o histórico fica somente leitura | APROVADO |
+| 6 | Conversa de terceiros: 403 para abrir, ler, marcar, editar e apagar (inclusive para o administrador) | APROVADO |
+| 7 | Sem autenticação ou com token inválido: 403 | APROVADO |
+| 8 | As mensagens aparecem corretamente para os dois, sem recarregar a página | APROVADO |
+| 9 | Contagem de não lidas na lista e na navegação, zerada ao abrir a conversa, com confirmação "Vista" | APROVADO |
+| 10 | O histórico continua salvo depois de sair e entrar de novo | APROVADO |
+

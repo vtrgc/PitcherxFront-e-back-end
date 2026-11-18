@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNotificacoes } from "../context/NotificacoesContext";
+import { useMensagensNaoLidas } from "../context/MensagensContext";
 import { NAV_ADMIN, NAV_USUARIO, itemAtivo, textoContador } from "./navegacao";
 import Avatar from "./ui/Avatar";
 
@@ -20,6 +21,8 @@ export default function Sidebar() {
   const { naoLidas } = useNotificacoes();
   const itens = isAdmin ? NAV_ADMIN : NAV_USUARIO;
   const contador = textoContador(naoLidas);
+  const { naoLidas: mensagensNaoLidas } = useMensagensNaoLidas();
+  const contadorMensagens = textoContador(mensagensNaoLidas);
 
   return (
     <aside className="relative bg-white text-ink-900 flex h-full w-60 flex-col border-r border-ink-100">
@@ -38,9 +41,9 @@ export default function Sidebar() {
       </Link>
 
       <nav aria-label="Navegação principal" className="relative flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
-        {itens.map(({ href, label, icon: Icon, emBreve, contadorNotificacoes }) => {
+        {itens.map(({ href, label, icon: Icon, emBreve, contadorNotificacoes, contadorMensagens: comContadorMensagens }) => {
           const ativo = itemAtivo(pathname, href);
-          const badge = contadorNotificacoes ? contador : null;
+          const badge = contadorNotificacoes ? contador : comContadorMensagens ? contadorMensagens : null;
           return (
             <Link
               key={href}

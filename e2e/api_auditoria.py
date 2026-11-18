@@ -10,7 +10,7 @@ Uso (com backend e front rodando):
   dependem de código por e-mail (verificar conta, redefinir senha) também são testados.
 Os dados criados usam e-mails aleatórios e não apagam nada que já exista no banco.
 """
-import base64, datetime, email, json, os, quopri, re, struct, sys, urllib.error, urllib.request, uuid, zlib
+import base64, datetime, email, json, os, quopri, re, struct, sys, urllib.error, urllib.parse, urllib.request, uuid, zlib
 
 BASE = os.environ.get("BASE_URL", "http://localhost:3000/backend").rstrip("/")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL")
@@ -620,6 +620,201 @@ s, r = req("DELETE", f"/conexao/{cx['idConexao']}", B["token"])
 chk("desfazer conexão de outras pessoas -> recusado", s in (400, 403), (s, r))
 s, r = req("DELETE", f"/conexao/{cx['idConexao']}", C["token"])
 chk("desfazer a própria conexão", s in (200, 204), (s, r))
+
+# ====================================================================== mensagens privadas
+secao("Mensagens privadas (só com conexão aceita)")
+
+
+def conta_nova(nome):
+    """Cadastra, aprova e (com MAILS_LOG) verifica uma conta. Devolve {id, token, email}."""
+    e = f"msg.{nome.split()[0].lower()}.{sufixo}@teste.com"
+    _, c = req("POST", "/usuario/cadastro-usuario", body={"nomeUsuario": nome, "emailUsuario": e, "senhaUsuario": SENHA})
+    req("POST", f"/usuario/admin/analise-identidade/{c['idUsuario']}", adm, {"status": "APROVADA"})
+    tok, _ = login(e, SENHA)
+    cod = codigo_no_email(e)
+    if cod:
+        req("POST", "/usuario/verificar-conta", tok, {"codigoVerificacao": cod})
+    return {"id": c["idUsuario"], "token": tok, "email": e, "nome": nome}
+
+
+def enviar(de, para, texto, chave=None):
+    return req("POST", "/mensagem", de["token"], {"destinatarioId": para["id"], "conteudo": texto, "chaveCliente": chave or uuid.uuid4().hex})
+
+
+MA, MB, MC = conta_nova("Marta Mensagens"), conta_nova("Bruno Mensagens"), conta_nova("Carla Mensagens")
+
+# 7. sem autenticação
+s, r = req("POST", "/mensagem", body={"destinatarioId": MB["id"], "conteudo": "oi"})
+chk("[7] enviar sem autenticação -> 403", s == 403, s)
+s, r = req("GET", "/mensagem/conversas")
+chk("[7] listar conversas sem autenticação -> 403", s == 403, s)
+s, r = req("GET", "/mensagem/nao-lidas", "token.invalido")
+chk("[7] token inválido -> 403", s == 403, s)
+
+# 2. sem conexão
+s, r = enviar(MA, MB, "Oi, sem conexão")
+chk("[2] sem conexão: envio recusado (403)", s == 403 and "conectados" in str(r), (s, r))
+s, r = req("GET", f"/mensagem/permissao/{MB['id']}", MA["token"])
+chk("[2] sem conexão: permissão SEM_CONEXAO", s == 200 and r.get("podeEnviar") is False and r.get("situacao") == "SEM_CONEXAO", (s, r))
+s, r = req("GET", "/mensagem/conversas", MA["token"])
+chk("[2] tentativa recusada não cria conversa", s == 200 and r == [], (s, r))
+
+# 3. conexão pendente
+s, cxm = req("POST", f"/conexao/solicitar/{MB['id']}", MA["token"])
+chk("conexão A → B solicitada", s in (200, 201) and cxm.get("status") == "PENDENTE", (s, cxm))
+s, r = enviar(MA, MB, "Oi, conexão pendente")
+chk("[3] pendente: quem pediu não envia (403)", s == 403 and "ainda não foi aceita" in str(r), (s, r))
+s, r = enviar(MB, MA, "Oi, ainda não aceitei")
+chk("[3] pendente: quem recebeu também não envia (403)", s == 403 and "Aceite" in str(r), (s, r))
+s, r = req("GET", f"/mensagem/permissao/{MA['id']}", MB["token"])
+chk("[3] pendente: permissão diz que é preciso aceitar", s == 200 and r.get("situacao") == "PENDENTE_RECEBIDA" and r.get("podeEnviar") is False, (s, r))
+
+# 4. conexão aceita
+s, r = req("PUT", f"/conexao/{cxm['idConexao']}/aceitar", MB["token"])
+chk("conexão aceita por B", s == 200 and r.get("status") == "ACEITO", (s, r))
+s, r = req("GET", f"/mensagem/permissao/{MB['id']}", MA["token"])
+chk("[4] aceita: permissão liberada (CONECTADOS)", s == 200 and r.get("podeEnviar") is True and r.get("situacao") == "CONECTADOS", (s, r))
+
+# 1. A conectado a B envia
+chave1 = uuid.uuid4().hex
+s, m1 = enviar(MA, MB, "  Olá, Bruno! Tudo bem?  ", chave1)
+chk("[1] conectados: A envia -> 201", s == 201 and m1.get("conteudo") == "Olá, Bruno! Tudo bem?" and m1.get("minha") is True, (s, m1))
+conv = m1.get("conversaId")
+s, r = enviar(MA, MB, "Olá, Bruno! Tudo bem?", chave1)
+chk("reenvio com a mesma chave não duplica (200, mesmo id)", s == 200 and r.get("idMensagem") == m1.get("idMensagem"), (s, r))
+s, m2 = enviar(MB, MA, "Oi, Marta! Tudo ótimo.")
+chk("[1] o outro lado também envia -> 201, mesma conversa", s == 201 and m2.get("conversaId") == conv, (s, m2))
+s, m3 = enviar(MA, MB, "Vamos conversar sobre o projeto?")
+chk("terceira mensagem", s == 201, (s, m3))
+
+# validações
+s, r = enviar(MA, MB, "    ")
+chk("mensagem vazia (só espaços) -> 400", s == 400, (s, r))
+s, r = enviar(MA, MB, "x" * 2001)
+chk("mensagem acima de 2000 caracteres -> 400", s == 400, (s, r))
+s, r = req("POST", "/mensagem", MA["token"], {"conteudo": "sem destinatário"})
+chk("sem destinatário -> 400", s == 400, (s, r))
+s, r = enviar(MA, MA, "para mim mesma")
+chk("mensagem para si mesmo -> 400", s == 400, (s, r))
+s, r = enviar(MA, {"id": 99999999}, "para ninguém")
+chk("destinatário inexistente -> 404", s == 404, (s, r))
+s, r = req("GET", "/mensagem/permissao/99999999", MA["token"])
+chk("permissão com usuário inexistente -> 404", s == 404, (s, r))
+
+# 8 e 9. aparecem para os dois; não lidas
+s, lb = req("GET", "/mensagem/conversas", MB["token"])
+cb = (lb or [{}])[0] if s == 200 else {}
+chk("[8] conversa aparece para B com A, a última mensagem e 2 não lidas",
+    s == 200 and len(lb) == 1 and cb.get("participante", {}).get("idUsuario") == MA["id"]
+    and cb.get("ultimaMensagem", {}).get("idMensagem") == m3.get("idMensagem") and cb.get("naoLidas") == 2, (s, lb))
+s, la = req("GET", "/mensagem/conversas", MA["token"])
+chk("[8] conversa aparece para A com B (1 não lida: a resposta de B)",
+    s == 200 and len(la) == 1 and la[0]["participante"]["idUsuario"] == MB["id"] and la[0]["naoLidas"] == 1, (s, la))
+s, r = req("GET", "/mensagem/nao-lidas", MB["token"])
+chk("[9] contador de não lidas de B = 2", s == 200 and r.get("quantidade") == 2, (s, r))
+s, h = req("GET", f"/mensagem/conversas/{conv}/mensagens", MB["token"])
+ids = [x["idMensagem"] for x in h.get("mensagens", [])] if s == 200 else []
+chk("[8] histórico em ordem de envio, visto por B", s == 200 and ids == [m1["idMensagem"], m2["idMensagem"], m3["idMensagem"]], (s, ids))
+chk("[8] 'minha' correto para cada lado", s == 200 and [x["minha"] for x in h["mensagens"]] == [False, True, False], h)
+s, r = req("GET", f"/mensagem/conversas/{conv}", MB["token"])
+chk("buscar a conversa", s == 200 and r.get("idConversa") == conv and r.get("podeEnviar") is True, (s, r))
+s, p1 = req("GET", f"/mensagem/conversas/{conv}/mensagens?limite=2", MB["token"])
+chk("histórico paginado: últimas 2 e temMais", s == 200 and [x["idMensagem"] for x in p1["mensagens"]] == ids[1:] and p1["temMais"] is True, (s, p1))
+s, p2 = req("GET", f"/mensagem/conversas/{conv}/mensagens?limite=2&antesDe={ids[1]}", MB["token"])
+chk("histórico: mensagens anteriores (antesDe)", s == 200 and [x["idMensagem"] for x in p2["mensagens"]] == ids[:1] and p2["temMais"] is False, (s, p2))
+
+# atualização incremental (o que a tela usa para mostrar mensagens novas sem recarregar)
+cursor = h["cursor"]
+s, m4 = enviar(MA, MB, "Mensagem nova enquanto B está na conversa")
+s, inc = req("GET", f"/mensagem/conversas/{conv}/mensagens?desde={urllib.parse.quote(cursor, safe='')}", MB["token"])
+chk("atualização incremental traz a mensagem nova", s == 200 and m4.get("idMensagem") in [x["idMensagem"] for x in inc.get("mensagens", [])], (s, inc))
+
+# leitura
+s, r = req("PUT", f"/mensagem/conversas/{conv}/lida", MB["token"])
+chk("[9] marcar conversa como lida -> 3 mensagens", s == 200 and r.get("quantidade") == 3, (s, r))
+s, r = req("GET", "/mensagem/nao-lidas", MB["token"])
+chk("[9] depois de ler, B tem 0 não lidas", s == 200 and r.get("quantidade") == 0, (s, r))
+s, inc = req("GET", f"/mensagem/conversas/{conv}/mensagens?desde={urllib.parse.quote(cursor, safe='')}", MA["token"])
+lidas = {x["idMensagem"]: x["lida"] for x in inc.get("mensagens", [])}
+chk("A vê as mensagens como lidas (confirmação de leitura)", s == 200 and lidas.get(m1["idMensagem"]) is True and lidas.get(m4["idMensagem"]) is True, (s, lidas))
+
+# 6. terceiros
+s, r = req("GET", f"/mensagem/conversas/{conv}", MC["token"])
+chk("[6] terceiro abre a conversa -> 403", s == 403, (s, r))
+s, r = req("GET", f"/mensagem/conversas/{conv}/mensagens", MC["token"])
+chk("[6] terceiro lê o histórico -> 403", s == 403, (s, r))
+s, r = req("PUT", f"/mensagem/conversas/{conv}/lida", MC["token"])
+chk("[6] terceiro marca como lida -> 403", s == 403, (s, r))
+s, r = req("PUT", f"/mensagem/{m1['idMensagem']}", MC["token"], {"conteudo": "invadido"})
+chk("[6] terceiro edita mensagem -> 403", s == 403, (s, r))
+s, r = req("DELETE", f"/mensagem/{m1['idMensagem']}", MC["token"])
+chk("[6] terceiro apaga mensagem -> 403", s == 403, (s, r))
+s, r = req("GET", f"/mensagem/conversas/{conv}/mensagens", adm)
+chk("[6] nem o administrador lê conversas privadas -> 403", s == 403, (s, r))
+s, r = req("GET", "/mensagem/conversas/99999999", MA["token"])
+chk("conversa inexistente -> 404", s == 404, (s, r))
+
+# edição e exclusão
+s, r = req("PUT", f"/mensagem/{m1['idMensagem']}", MB["token"], {"conteudo": "editado por B"})
+chk("editar mensagem do outro -> 403", s == 403, (s, r))
+s, r = req("PUT", f"/mensagem/{m1['idMensagem']}", MA["token"], {"conteudo": "Olá, Bruno! Tudo bem por aí?"})
+chk("editar a própria mensagem -> 200 (marca edição)", s == 200 and r.get("conteudo") == "Olá, Bruno! Tudo bem por aí?" and r.get("dataEdicao"), (s, r))
+s, r = req("PUT", f"/mensagem/{m1['idMensagem']}", MA["token"], {"conteudo": "   "})
+chk("editar para vazio -> 400", s == 400, (s, r))
+s, r = req("DELETE", f"/mensagem/{m3['idMensagem']}", MB["token"])
+chk("apagar mensagem do outro -> 403", s == 403, (s, r))
+s, r = req("DELETE", f"/mensagem/{m3['idMensagem']}", MA["token"])
+chk("apagar a própria mensagem -> 204", s == 204, (s, r))
+s, h2 = req("GET", f"/mensagem/conversas/{conv}/mensagens", MB["token"])
+apagada = next((x for x in h2.get("mensagens", []) if x["idMensagem"] == m3["idMensagem"]), {})
+chk("mensagem apagada some para o outro lado (sem texto)", apagada.get("excluida") is True and apagada.get("conteudo") is None, apagada)
+s, r = req("PUT", f"/mensagem/{m3['idMensagem']}", MA["token"], {"conteudo": "volta"})
+chk("editar mensagem apagada -> 400", s == 400, (s, r))
+
+# 5. remoção da conexão
+s, r = req("DELETE", f"/conexao/{cxm['idConexao']}", MB["token"])
+chk("conexão removida por B", s in (200, 204), (s, r))
+s, r = enviar(MA, MB, "Depois da remoção")
+chk("[5] conexão removida: A não envia mais (403)", s == 403, (s, r))
+s, r = enviar(MB, MA, "Depois da remoção (B)")
+chk("[5] conexão removida: B também não envia (403)", s == 403, (s, r))
+s, r = req("PUT", f"/mensagem/{m4['idMensagem']}", MA["token"], {"conteudo": "editar depois da remoção"})
+chk("[5] conexão removida: edição bloqueada (403)", s == 403, (s, r))
+s, r = req("GET", f"/mensagem/conversas/{conv}", MA["token"])
+chk("[5] histórico antigo continua visível, somente leitura", s == 200 and r.get("podeEnviar") is False and r.get("situacao") == "SEM_CONEXAO", (s, r))
+s, r = req("GET", f"/mensagem/conversas/{conv}/mensagens", MA["token"])
+chk("[5] mensagens antigas preservadas", s == 200 and len(r.get("mensagens", [])) == 4, (s, r))
+
+# reconexão reaproveita a conversa
+s, cx2 = req("POST", f"/conexao/solicitar/{MA['id']}", MB["token"])
+s, r = req("PUT", f"/conexao/{cx2['idConexao']}/aceitar", MA["token"])
+s, r = enviar(MB, MA, "Conectados de novo!")
+chk("nova conexão aceita (no outro sentido) libera de novo, na mesma conversa", s == 201 and r.get("conversaId") == conv, (s, r))
+
+# conexão recusada
+s, cx3 = req("POST", f"/conexao/solicitar/{MA['id']}", MC["token"])
+s, r = req("PUT", f"/conexao/{cx3['idConexao']}/recusar", MA["token"])
+s, r = enviar(MC, MA, "Fui recusada")
+chk("conexão recusada: envio bloqueado (403)", s == 403 and "recusada" in str(r), (s, r))
+s, r = req("GET", f"/mensagem/permissao/{MA['id']}", MC["token"])
+chk("conexão recusada: permissão RECUSADA", s == 200 and r.get("situacao") == "RECUSADA", (s, r))
+
+# 10. histórico salvo depois de sair e entrar de novo
+novo_token, _ = login(MA["email"], SENHA)
+s, r = req("GET", "/mensagem/conversas", novo_token)
+s2, hist = req("GET", f"/mensagem/conversas/{conv}/mensagens", novo_token)
+chk("[10] novo login: conversa e histórico continuam salvos",
+    s == 200 and len(r) == 1 and s2 == 200 and len(hist.get("mensagens", [])) == 5, (s, len(r or []), s2, len(hist.get("mensagens", []) if isinstance(hist, dict) else [])))
+
+# exclusão de conta com conversas (a limpeza não pode quebrar a exclusão)
+MD = conta_nova("Davi Mensagens")
+s, cx4 = req("POST", f"/conexao/solicitar/{MA['id']}", MD["token"])
+req("PUT", f"/conexao/{cx4['idConexao']}/aceitar", MA["token"])
+s, md1 = enviar(MD, MA, "Vou excluir minha conta")
+s2, r = req("DELETE", f"/usuario/{MD['id']}", MD["token"])
+chk("excluir conta que tem conversas -> 204", s == 201 and s2 in (200, 204), (s, s2, r))
+s, r = req("GET", "/mensagem/conversas", MA["token"])
+chk("conversas da conta excluída saem da lista da outra pessoa", s == 200 and all(c["participante"]["idUsuario"] != MD["id"] for c in r), (s, r))
 
 # ====================================================================== denúncias
 secao("Denúncias e moderação")

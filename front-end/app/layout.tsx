@@ -10,6 +10,7 @@ import "./globals.css";
 import { AuthProvider } from "./context/AuthContext";
 import { FeedbackProvider } from "./components/ui/FeedbackProvider";
 import { NotificacoesProvider } from "./context/NotificacoesContext";
+import { MensagensProvider } from "./context/MensagensContext";
 
 export const metadata: Metadata = {
   title: "PitcherX — Conecte ideias a oportunidades",
@@ -29,7 +30,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans">
         <AuthProvider>
           <NotificacoesProvider>
-            <FeedbackProvider>{children}</FeedbackProvider>
+            <MensagensProvider>
+              <FeedbackProvider>{children}</FeedbackProvider>
+            </MensagensProvider>
           </NotificacoesProvider>
         </AuthProvider>
       </body>

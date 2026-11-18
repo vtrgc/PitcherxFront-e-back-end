@@ -30,6 +30,7 @@ import {
   Award,
   Flag,
   Film,
+  MessageCircle,
   type LucideIcon,
 } from "lucide-react";
 import BotaoConexao from "../conexao/BotaoConexao";
@@ -285,6 +286,8 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
   }
 
   const totalProjetos = projetos.dados.length;
+  // Mensagens só com conexão aceita em qualquer sentido (o backend confere de novo em todo envio).
+  const conectados = !conexao.carregando && !conexao.erro && (conexao.relacao.euSigo || conexao.relacao.meSegue);
   const acoes = (
     <>
       {proprio && !logadoAdmin && (
@@ -306,6 +309,11 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
           onDeixarDeSeguir={() => acaoConexao(conexao.deixarDeSeguir)}
           onCancelar={() => acaoConexao(conexao.cancelarSolicitacao)}
         />
+      )}
+      {outro && conectados && (
+        <Link href={`/mensagens?com=${id}`} className={cls.btnContorno}>
+          <MessageCircle size={16} aria-hidden="true" /> Enviar mensagem
+        </Link>
       )}
       {!proprio && linkedin && (
         <a href={linkedin} target="_blank" rel="noopener noreferrer" className={outro ? cls.btnContorno : cls.btnPrimario}>
@@ -475,7 +483,7 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-3">
               <p className="flex items-center gap-2 text-[13.5px] font-medium text-ink-800">
                 <UserPlus size={16} className="text-brand-700" aria-hidden="true" />
-                {usuario.nomeUsuario} quer se conectar com você.
+                {usuario.nomeUsuario} quer se conectar com você.{!conectados && " Aceite para poder trocar mensagens."}
               </p>
               <BotaoConexao
                 compacto
@@ -486,6 +494,12 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
                 onRecusar={() => acaoConexao(conexao.recusar)}
               />
             </div>
+          )}
+          {outro && !conexao.carregando && !conectados && conexao.relacao.solicitacaoEnviada && (
+            <p className="mt-4 flex items-center gap-2 rounded-xl border border-ink-100 bg-ink-25 px-4 py-3 text-[13px] text-ink-600">
+              <MessageCircle size={15} className="shrink-0 text-ink-400" aria-hidden="true" />
+              As mensagens ficam disponíveis quando {usuario.nomeUsuario} aceitar a sua solicitação de conexão.
+            </p>
           )}
           {outro && conexao.erro && (
             <Alerta className="mt-4" onTentarNovamente={conexao.recarregar}>

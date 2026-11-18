@@ -24,6 +24,8 @@ export interface ItemNavegacao {
   emBreve?: boolean;
   /** Mostra o contador de notificações não lidas. */
   contadorNotificacoes?: boolean;
+  /** Mostra o contador de mensagens não lidas. */
+  contadorMensagens?: boolean;
 }
 
 /** Navegação de usuários comuns (USUARIO/EMPRESA). */
@@ -37,7 +39,7 @@ export const NAV_USUARIO: ItemNavegacao[] = [
   { href: "/contratos", label: "Contratos", icon: FileSignature },
   { href: "/feed#criar-post", label: "Criar publicação", icon: PlusSquare },
   { href: "/notificacoes", label: "Notificações", icon: Bell, contadorNotificacoes: true },
-  { href: "/mensagens", label: "Mensagens", icon: MessageCircle, emBreve: true },
+  { href: "/mensagens", label: "Mensagens", icon: MessageCircle, contadorMensagens: true },
   { href: "/perfil", label: "Perfil", icon: User },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
