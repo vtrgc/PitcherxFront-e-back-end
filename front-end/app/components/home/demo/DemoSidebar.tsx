@@ -10,7 +10,7 @@ const ITENS = [
   { label: "Propostas", icon: HandCoins, chave: "propostas" },
   { label: "Contratos", icon: FileSignature, chave: "contratos" },
   { label: "Criar publicação", icon: PlusSquare, chave: "criar" },
-  { label: "Mensagens", icon: MessageCircle, chave: "mensagens", emBreve: true },
+  { label: "Mensagens", icon: MessageCircle, chave: "mensagens" },
   { label: "Notificações", icon: Bell, chave: "notificacoes", emBreve: true },
   { label: "Perfil", icon: User, chave: "perfil" },
   { label: "Configurações", icon: Settings, chave: "configuracoes" },
