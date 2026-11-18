@@ -60,7 +60,7 @@ export default function PropostasDoProjeto({
   async function decidir(p: Proposta, aceitar: boolean) {
     const ok = await confirmar(
       aceitar
-        ? `Aceitar a proposta #${p.idProposta} (${formatarMoeda(p.valorProposta)})? O autor passa a ser sócio do projeto e o valor é somado ao arrecadado.`
+        ? `Aceitar a proposta #${p.idProposta} (${formatarMoeda(p.valorProposta)})? O valor é somado ao arrecadado e o autor entra na equipe como sócio, se ainda não fizer parte dela.`
         : `Recusar a proposta #${p.idProposta}?`,
       { titulo: aceitar ? "Aceitar proposta" : "Recusar proposta", confirmarLabel: aceitar ? "Aceitar" : "Recusar", perigo: !aceitar }
     );

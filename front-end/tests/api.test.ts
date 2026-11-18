@@ -231,4 +231,26 @@ describe("contratos dos serviços com o backend", () => {
     expect(url).toBe("/backend/usuario/reenviar-codigo-verificacao");
     expect(init.method).toBe("POST");
   });
+  it("recuperação de senha: o código é validado em POST /usuario/validar-token, sem token", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { validarCodigoRedefinicao } = await import("../app/services/usuario.service");
+    await validarCodigoRedefinicao("ana@exemplo.com", "123456");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/backend/usuario/validar-token");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ emailUsuario: "ana@exemplo.com", codigoRedefinicao: "123456" });
+    expect(new Headers(init.headers).get("Authorization")).toBeNull();
+  });
+
+  it("excluir publicação e comentário: um único DELETE (o banco apaga os comentários e respostas)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { excluirPostagemComComentarios } = await import("../app/services/postagem.service");
+    const { excluirComentarioComRespostas } = await import("../app/services/comentario.service");
+    await excluirPostagemComComentarios(7);
+    await excluirComentarioComRespostas(9);
+    // Antes: listava e apagava comentário por comentário (403 para os de outras pessoas).
+    expect(fetchMock.mock.calls.map(([u, i]) => `${i.method} ${u}`)).toEqual(["DELETE /backend/postagem/7", "DELETE /backend/comentario/9"]);
+  });
 });

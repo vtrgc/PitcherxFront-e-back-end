@@ -2,7 +2,7 @@ import { api, mapComLimite } from "../lib/api";
 import { Post } from "../types/Post";
 import { PostagemRequest } from "../types/PostagemRequest";
 import { buscarStatusCurtida, TIPO_CONTEUDO } from "./curtida.service";
-import { excluirComentarioComRespostas, listarComentarios } from "./comentario.service";
+import { listarComentarios } from "./comentario.service";
 
 export function listarPostagens() {
   return api<Post[]>("/postagem");
@@ -84,12 +84,11 @@ export function excluirPostagem(id: number) {
 }
 
 /**
- * Exclui a publicação removendo antes os comentários (e as respostas deles). Sem a cascata do
- * banco (tabelas criadas pelo Hibernate), o DELETE de uma publicação comentada falha com 500.
+ * Exclui a publicação; comentários e respostas saem junto (ON DELETE CASCADE nas tabelas das
+ * migrations). Antes, o front apagava cada comentário primeiro; como só o autor (ou o admin)
+ * pode apagar um comentário, uma publicação comentada por outra pessoa não podia ser excluída.
  */
 export async function excluirPostagemComComentarios(id: number) {
-  const comentarios = ((await listarComentarios()) ?? []).filter((c) => c.postagemId === id);
-  for (const c of comentarios) await excluirComentarioComRespostas(c.idComentario);
   await excluirPostagem(id);
 }
 

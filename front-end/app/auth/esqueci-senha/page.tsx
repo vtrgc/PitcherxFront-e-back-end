@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Mail } from "lucide-react";
 import { ApiError, NetworkError } from "../../lib/api";
 import { emailValido, SENHA_MINIMA } from "../../lib/validacao";
-import { esqueciSenha, resetarSenha } from "../../services/usuario.service";
+import { esqueciSenha, resetarSenha, validarCodigoRedefinicao } from "../../services/usuario.service";
 import AuthField from "../../components/auth/AuthField";
 import AuthButton from "../../components/auth/AuthButton";
 import AuthAlert from "../../components/auth/AuthAlert";
@@ -18,13 +18,10 @@ import "./esqueci-senha.css";
 /**
  * Fluxo de recuperação em 3 telas:
  *  1. E-mail        -> POST /usuario/esqueci-senha (o backend envia um código de 6 dígitos, válido por 15 min).
- *  2. Verificação   -> apenas coleta os 6 dígitos (veja a observação abaixo).
- *  3. Nova senha    -> POST /usuario/resetar-senha (confere o código e grava a nova senha).
- *
- * Observação: o endpoint /usuario/validar-token do backend responde 204 mesmo quando o
- * código é inválido (o resultado da validação é descartado no controller). Por isso a
- * conferência real do código é feita pelo /resetar-senha, que devolve 400 se o código
- * for inválido ou estiver expirado — nesse caso a tela volta para a etapa do código.
+ *  2. Verificação   -> POST /usuario/validar-token (código errado ou expirado é avisado aqui,
+ *                      antes de a pessoa criar a nova senha).
+ *  3. Nova senha    -> POST /usuario/resetar-senha (confere o código de novo e grava a senha);
+ *                      se o código expirar nesse meio-tempo, a tela volta para a etapa do código.
  */
 type Etapa = "email" | "codigo" | "senha" | "sucesso";
 
@@ -170,13 +167,28 @@ export default function EsqueciSenha() {
     preencherAPartirDe(/\d{6}/.test(colado.replace(/\D/g, "")) ? 0 : indice, colado);
   }
 
-  function handleConfirmarCodigo() {
+  async function handleConfirmarCodigo() {
     if (!new RegExp(`^\\d{${TAMANHO_CODIGO}}$`).test(codigo)) {
       setAviso("");
       setErroCodigo(`Digite os ${TAMANHO_CODIGO} dígitos do código enviado para o seu e-mail.`);
       return;
     }
-    irPara("senha");
+    limparMensagens();
+    setLoading(true);
+    try {
+      await validarCodigoRedefinicao(email, codigo);
+      irPara("senha");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 400) {
+        setErroCodigo("Código inválido ou expirado. Confira o código ou solicite um novo.");
+      } else if (error instanceof ApiError || error instanceof NetworkError) {
+        setErro(error.message);
+      } else {
+        setErro("Não foi possível conectar ao servidor.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleReenviar() {

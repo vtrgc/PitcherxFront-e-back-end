@@ -147,8 +147,12 @@ const PNG = Buffer.from(
 
   const browser = await chromium.launch();
   const contextos = [];
-  async function abrir({ viewport, dispositivo, token, usuario } = {}) {
-    const ctx = await browser.newContext(dispositivo ? { ...devices[dispositivo] } : { viewport: viewport || { width: 1366, height: 900 } });
+  async function abrir({ viewport, dispositivo, token, usuario, movel } = {}) {
+    const ctx = await browser.newContext(
+      dispositivo
+        ? { ...devices[dispositivo] }
+        : { viewport: viewport || { width: 1366, height: 900 }, ...(movel ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : {}) }
+    );
     contextos.push(ctx);
     if (token)
       await ctx.addInitScript(
@@ -203,11 +207,23 @@ const PNG = Buffer.from(
       rotas: ["/feed", `/projetos/${proj.idProjeto}`, "/propostas", `/propostas/${prop.idProposta}`, "/contratos", `/contratos/${contrato.idContrato}`, "/perfil", `/perfil/${ana.id}`],
     },
   ];
-  const telas = [
-    { nome: "computador", viewport: { width: 1366, height: 900 } },
-    { nome: "tablet", viewport: { width: 768, height: 1024 } },
-    { nome: "celular", dispositivo: "iPhone 13" },
-  ];
+  // TELAS=completo: seis tamanhos (responsividade); padrão: computador, tablet e celular.
+  const telas =
+    process.env.TELAS === "completo"
+      ? [
+          { nome: "desktop 1920", viewport: { width: 1920, height: 1080 } },
+          { nome: "notebook 1366", viewport: { width: 1366, height: 768 } },
+          { nome: "tablet paisagem 1024", viewport: { width: 1024, height: 768 } },
+          { nome: "tablet retrato 768", viewport: { width: 768, height: 1024 } },
+          { nome: "celular 390", dispositivo: "iPhone 13" },
+          { nome: "celular pequeno 360", viewport: { width: 360, height: 740 }, movel: true },
+        ]
+      : [
+          { nome: "computador", viewport: { width: 1366, height: 900 } },
+          { nome: "tablet", viewport: { width: 768, height: 1024 } },
+          { nome: "celular", dispositivo: "iPhone 13" },
+        ];
+  const PRINTS = process.env.SAIDA_DIR ? require("path").join(process.env.SAIDA_DIR, "responsivo") : "";
   // 404 esperados: a rota inexistente e o portão de termos (a investidora ainda não aceitou os termos).
   const esperado = (e) => /HTTP 404 GET \/rota-inexistente/.test(e) || /HTTP 403 GET \/backend\/projeto\/\d+$/.test(e);
   let paginas = 0;
@@ -215,7 +231,7 @@ const PNG = Buffer.from(
   const imagensExternas = new Set();
   for (const p of perfis) {
     for (const t of telas) {
-      const page = await abrir({ viewport: t.viewport, dispositivo: t.dispositivo, token: p.token, usuario: p.usuario });
+      const page = await abrir({ viewport: t.viewport, dispositivo: t.dispositivo, movel: t.movel, token: p.token, usuario: p.usuario });
       for (const rota of p.rotas) {
         page.erros = [];
         try {
@@ -229,11 +245,32 @@ const PNG = Buffer.from(
           overflow: document.documentElement.scrollWidth - window.innerWidth,
           quebrada: /Application error|Unhandled Runtime Error|This page could not be found/.test(document.body.innerText) && !location.pathname.includes("inexistente"),
           imagensQuebradas: [...document.images].filter((i) => i.complete && i.naturalWidth === 0 && i.src && !i.src.startsWith("data:")).map((i) => i.src),
+          // Elementos visíveis que passam da largura da tela sem estar dentro de uma área com rolagem
+          // própria (cortados ou fora do lugar mesmo sem rolagem horizontal na página).
+          foraDaTela: [...document.querySelectorAll("body *")]
+            .filter((el) => {
+              const r = el.getBoundingClientRect();
+              if (r.width <= 1 || r.height <= 1 || (r.right <= window.innerWidth + 1 && r.left >= -1)) return false;
+              const cs = getComputedStyle(el);
+              if (cs.visibility === "hidden" || cs.display === "none" || cs.position === "fixed") return false;
+              for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+                const ca = getComputedStyle(a);
+                if (ca.overflowX !== "visible" || ca.position === "fixed" || Number(ca.opacity) === 0) return false;
+              }
+              return true;
+            })
+            .slice(0, 3)
+            .map((el) => `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}.${String(el.className).split(" ").slice(0, 2).join(".")} (${Math.round(el.getBoundingClientRect().left)}→${Math.round(el.getBoundingClientRect().right)})`),
         }));
+        if (PRINTS && t.movel) {
+          require("fs").mkdirSync(PRINTS, { recursive: true });
+          await page.screenshot({ path: require("path").join(PRINTS, `${p.quem}${rota.replace(/[/?=&]+/g, "_") || "_inicio"}.png`) }).catch(() => {});
+        }
         const erros = page.erros.filter((e) => !esperado(e));
         const prob = [];
         if (erros.length) prob.push(...new Set(erros));
         if (info.overflow > 1) prob.push(`rolagem horizontal de ${info.overflow}px`);
+        if (info.foraDaTela.length) prob.push(`fora da tela: ${info.foraDaTela.join(", ")}`);
         if (info.quebrada) prob.push("página com erro");
         // Imagens de bancos externos (Unsplash) dependem da rede do ambiente: contadas à parte.
         const externas = info.imagensQuebradas.filter((src) => !src.startsWith(BASE) && !src.includes("localhost"));
@@ -248,6 +285,14 @@ const PNG = Buffer.from(
   if (problemas.length) console.log("  Problemas encontrados:\n    " + problemas.join("\n    "));
   ok(`${paginas} aberturas de página sem erros, sem rolagem horizontal e sem imagens quebradas`, problemas.length === 0, `${problemas.length} página(s) com problema (lista acima)`);
   if (imagensExternas.size) naoTestado(`imagens externas (${[...imagensExternas].join(", ")})`, "o host não é acessível pela rede deste ambiente");
+
+  // SOMENTE_PAGINAS=1: só a varredura de páginas (ex.: responsividade em seis tamanhos).
+  if (process.env.SOMENTE_PAGINAS) {
+    await browser.close();
+    const r = resultados.filter((x) => x.status === "REPROVADO").length;
+    console.log(`\n${resultados.filter((x) => x.status === "APROVADO").length}/${resultados.length} verificações aprovadas · ${r} reprovadas`);
+    process.exit(r ? 1 : 0);
+  }
 
   // ---------------------------------------------------------------- 2. autenticação
   titulo("Autenticação");

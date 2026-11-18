@@ -3,8 +3,8 @@
  *
  * Regra: só o que o PitcherX faz hoje. Nada de números de uso, depoimentos, notas ou logos de
  * parceiros. Os números que aparecem são regras reais do produto (limites de caracteres, papéis).
- * Mensagens diretas ainda não existem (as notificações cobrem apenas conexões); pagamentos e
- * investimentos não passam pela plataforma.
+ * Mensagens privadas existem só entre conexões aceitas; pagamentos e investimentos não passam
+ * pela plataforma.
  */
 
 export const HERO = {
@@ -15,7 +15,7 @@ export const HERO = {
 
 export const FAIXA = {
   titulo: "O que você encontra na plataforma",
-  itens: ["Feed", "Explorar", "Projetos", "Equipes", "Propostas", "Contratos", "Perfil profissional"],
+  itens: ["Feed", "Explorar", "Projetos", "Equipes", "Propostas", "Contratos", "Mensagens", "Perfil profissional"],
 };
 
 export const PASSOS = {

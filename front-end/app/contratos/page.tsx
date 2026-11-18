@@ -21,7 +21,7 @@ import { formatarDataHora } from "../lib/date";
 import { Contrato, ContratoRequest } from "../types/Contrato";
 import { Projeto } from "../types/Projeto";
 import { listarContratos, criarContrato, atualizarContrato, excluirContrato, aceitarContrato } from "../services/contrato.service";
-import { idsPropostasEnviadas, listarPropostas } from "../services/proposta.service";
+import { listarPropostas } from "../services/proposta.service";
 import { Proposta } from "../types/Proposta";
 import { ChipStatusNegociacao } from "../components/projeto/ChipsNegociacao";
 import { listarProjetos } from "../services/projeto.service";
@@ -39,10 +39,11 @@ export default function ContratosPage() {
 /**
  * Contratos — registro formal de autoria dos projetos (base do verificador antiplágio).
  *
- * O `GET /contrato` do backend devolve TODOS os contratos para qualquer conta autenticada.
- * A interface restringe a exibição: o administrador vê todos; os demais usuários veem apenas
- * contratos de projetos em que são PARTE (criador, sócio ou investidor — ver
- * `VINCULOS_PARTE_CONTRATO`). Se não for possível confirmar os vínculos, nada é exibido.
+ * O `GET /contrato` do backend já devolve só os contratos que a conta pode ver: o administrador
+ * vê todos; os demais, os dos projetos em que são parte (criador, sócio ou investidor) e os que
+ * formalizam uma proposta que enviaram. A tela mostra exatamente essa lista (antes ela filtrava
+ * de novo usando uma lista de propostas guardada só neste navegador e escondia contratos de
+ * quem tinha enviado a proposta por outro aparelho).
  * Criar/editar/excluir continua restrito ao CRIADOR do projeto (ou ao admin).
  */
 function ContratosPageContent() {
@@ -80,15 +81,8 @@ function ContratosPageContent() {
         isAdmin ? Promise.resolve(new Set<number>()) : listarIdsProjetosParte(idUsuario),
         listarPropostas().catch(() => [] as Proposta[]),
       ]);
-      // Projetos para os quais enviei proposta: o contrato que a formaliza também é meu para aceitar.
-      const enviadas = idsPropostasEnviadas(idUsuario);
-      const comMinhaProposta = new Set(
-        (listaPropostas ?? []).filter((p) => enviadas.has(p.idProposta) && p.projetoId != null).map((p) => p.projetoId as number)
-      );
-      const visiveisParaMim = (listaContratos ?? []).filter((c) => isAdmin || parte.has(c.projetoId) || comMinhaProposta.has(c.projetoId));
       setPropostas(listaPropostas ?? []);
-
-      setContratos(visiveisParaMim.sort((a, b) => b.idContrato - a.idContrato));
+      setContratos([...(listaContratos ?? [])].sort((a, b) => b.idContrato - a.idContrato));
       setProjetos(listaProjetos ?? []);
       setMeusProjetos(meus);
       setProjetosParte(parte);
@@ -109,7 +103,7 @@ function ContratosPageContent() {
 
   const podeGerenciar = useCallback(
     (projetoId: number) => isAdmin || meusProjetos.has(projetoId),
-    [isAdmin, meusProjetos, usuario?.roles]
+    [isAdmin, meusProjetos]
   );
   const projetosDisponiveis = useMemo(
     () => (isAdmin ? projetos : projetos.filter((p) => meusProjetos.has(p.idProjeto))),

@@ -124,14 +124,19 @@ export default function CrudAdmin<T, F extends Record<string, string>>(props: Pr
   const [erroForm, setErroForm] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
+  /** Item recém-salvo, destacado por alguns segundos (ele pode estar em outra página da lista). */
+  const [destaque, setDestaque] = useState<number | null>(null);
 
-  const carregar = useCallback(async () => {
+  const carregar = useCallback(async (): Promise<T[] | null> => {
     setLoading(true);
     setErroCarregamento("");
     try {
-      setItens((await listar()) ?? []);
+      const lista = (await listar()) ?? [];
+      setItens(lista);
+      return lista;
     } catch (error) {
       setErroCarregamento(mensagemErro(error, `Não foi possível carregar ${rotuloPlural}.`));
+      return null;
     } finally {
       setLoading(false);
     }
@@ -141,12 +146,39 @@ export default function CrudAdmin<T, F extends Record<string, string>>(props: Pr
     if (pronto) carregar();
   }, [pronto, carregar]);
 
-  const filtrados = useMemo(() => {
-    const lista = itens.filter((item) => correspondeBusca(busca, ...textoBusca(item)) && (!filtrar || filtrar(item)));
-    return lista.sort(ordenar ?? ((a, b) => idDe(b) - idDe(a)));
-  }, [itens, busca, textoBusca, filtrar, ordenar, idDe]);
+  const filtrarOrdenar = useCallback(
+    (lista: T[], termo: string) =>
+      lista
+        .filter((item) => correspondeBusca(termo, ...textoBusca(item)) && (!filtrar || filtrar(item)))
+        .sort(ordenar ?? ((a, b) => idDe(b) - idDe(a))),
+    [textoBusca, filtrar, ordenar, idDe]
+  );
+  const filtrados = useMemo(() => filtrarOrdenar(itens, busca), [filtrarOrdenar, itens, busca]);
 
   const paginacao = usePaginacao(filtrados, { chaveReinicio: `${busca}|${chaveFiltro}` });
+
+  /** A lista é paginada e ordenada: leva até a página do item salvo e o destaca. */
+  function mostrarItem(lista: T[], id: number) {
+    let termo = busca;
+    let ordem = filtrarOrdenar(lista, termo);
+    if (!ordem.some((item) => idDe(item) === id) && termo) {
+      termo = "";
+      setBusca("");
+      ordem = filtrarOrdenar(lista, termo);
+    }
+    const posicao = ordem.findIndex((item) => idDe(item) === id);
+    if (posicao < 0) return;
+    paginacao.irPara(Math.floor(posicao / paginacao.tamanho) + 1);
+    setDestaque(id);
+    window.setTimeout(() => document.getElementById(`crud-item-${id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 80);
+    window.setTimeout(() => setDestaque((atual) => (atual === id ? null : atual)), 4000);
+  }
+
+  function idDoResultado(resultado: unknown): number | null {
+    if (!resultado || typeof resultado !== "object") return null;
+    const id = idDe(resultado as T);
+    return typeof id === "number" && Number.isFinite(id) ? id : null;
+  }
 
   function abrir(item?: T) {
     setEditandoId(item ? idDe(item) : null);
@@ -171,11 +203,13 @@ export default function CrudAdmin<T, F extends Record<string, string>>(props: Pr
     setErroForm("");
     setSalvando(true);
     try {
-      await salvar(form, editandoId);
+      const resultado = await salvar(form, editandoId);
       notificar(`${capitalizar(rotuloSingular)} ${editandoId ? "atualizad" : "cadastrad"}${a} com sucesso.`, "sucesso");
+      const idSalvo = editandoId ?? idDoResultado(resultado);
       setModalAberto(false);
       setEditandoId(null);
-      await carregar();
+      const lista = await carregar();
+      if (lista && idSalvo !== null) mostrarItem(lista, idSalvo);
     } catch (error) {
       setErroForm(mensagemErro(error, erroSalvar ?? `Não foi possível salvar ${a} ${rotuloSingular}.`));
     } finally {
@@ -272,7 +306,13 @@ export default function CrudAdmin<T, F extends Record<string, string>>(props: Pr
               {paginacao.itens.map((item) => {
                 const id = idDe(item);
                 return (
-                  <li key={id} className="flex items-start justify-between gap-4 px-4 py-4 transition-colors hover:bg-brand-50/60 sm:px-6">
+                  <li
+                    key={id}
+                    id={`crud-item-${id}`}
+                    className={`flex items-start justify-between gap-4 px-4 py-4 transition-colors hover:bg-brand-50/60 sm:px-6 ${
+                      destaque === id ? "bg-brand-50 ring-1 ring-inset ring-brand-200" : ""
+                    }`}
+                  >
                     <div className="min-w-0 flex-1">{renderItem(item)}</div>
                     <div className="flex shrink-0 items-center gap-1">
                       {podeEscrever && (

@@ -6,6 +6,7 @@ import {
   FileText,
   FolderKanban,
   IdCard,
+  MessageCircle,
   Info,
   Newspaper,
   Plus,
@@ -54,7 +55,7 @@ export function Hero() {
 }
 
 // ------------------------------------------------------------------ faixa de recursos
-const ICONES_FAIXA: LucideIcon[] = [Newspaper, Compass, FolderKanban, Users, FileText, FileSignature, IdCard];
+const ICONES_FAIXA: LucideIcon[] = [Newspaper, Compass, FolderKanban, Users, FileText, FileSignature, MessageCircle, IdCard];
 
 export function Faixa() {
   return (

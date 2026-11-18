@@ -140,6 +140,15 @@ export function esqueciSenha(usuarioEmail: string) {
   });
 }
 
+/** POST /usuario/validar-token — 204 se o código de redefinição vale; 400 se está errado ou expirado. */
+export function validarCodigoRedefinicao(emailUsuario: string, codigoRedefinicao: string) {
+  return api<void>("/usuario/validar-token", {
+    method: "POST",
+    body: JSON.stringify({ emailUsuario, codigoRedefinicao }),
+    semAutenticacao: true,
+  });
+}
+
 export function resetarSenha(emailUsuario: string, codigoRedefinicao: string, novaSenha: string) {
   return api<void>("/usuario/resetar-senha", {
     method: "POST",

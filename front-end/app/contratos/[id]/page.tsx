@@ -18,12 +18,12 @@ import { Contrato, ContratoRequest } from "../../types/Contrato";
 import { Projeto } from "../../types/Projeto";
 import { Termo } from "../../types/Termo";
 import { buscarContrato, atualizarContrato, excluirContrato, aceitarContrato } from "../../services/contrato.service";
-import { idsPropostasEnviadas, listarPropostasDoProjeto } from "../../services/proposta.service";
+import { listarPropostasDoProjeto } from "../../services/proposta.service";
 import { Proposta } from "../../types/Proposta";
 import { ChipStatusNegociacao } from "../../components/projeto/ChipsNegociacao";
 import { buscarProjeto } from "../../services/projeto.service";
 import { listarTermosDoContrato } from "../../services/termo.service";
-import { ehParteDoContrato, listarPorUsuario } from "../../services/projetoUsuario.service";
+import { listarPorUsuario } from "../../services/projetoUsuario.service";
 import { TIPO_VINCULO_ID } from "../../types/ProjetoUsuario";
 
 export default function ContratoDetalhePage() {
@@ -60,21 +60,12 @@ export default function ContratoDetalhePage() {
     setNaoEncontrado(false);
     setSemAcesso(false);
     try {
+      // O backend só entrega o contrato às partes (criador, sócios, investidores, autor da
+      // proposta e admin) e responde 403 aos demais (tratado no catch).
       const dados = await buscarContrato(id);
-      // Permissão primeiro: sem confirmar o vínculo, o conteúdo não é exibido.
       if (!isAdmin) {
         const meusVinculos = (await listarPorUsuario(usuario.idUsuario)) ?? [];
-        const doProjeto = meusVinculos.filter((v) => v.projetoId === dados.projetoId);
-        // Quem enviou proposta ao projeto também vê (e aceita) o contrato que a formaliza.
-        const enviadas = idsPropostasEnviadas(usuario.idUsuario);
-        const propostasProjeto = await listarPropostasDoProjeto(dados.projetoId).catch(() => [] as Proposta[]);
-        const enviouProposta = (propostasProjeto ?? []).some((p) => enviadas.has(p.idProposta));
-        if (!ehParteDoContrato(doProjeto, usuario.idUsuario) && !enviouProposta) {
-          setContrato(null);
-          setSemAcesso(true);
-          return;
-        }
-        setEhDono(doProjeto.some((v) => v.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR));
+        setEhDono(meusVinculos.some((v) => v.projetoId === dados.projetoId && v.tipoVinculoId === TIPO_VINCULO_ID.CRIADOR));
       }
       setContrato(dados);
       const [rProjeto, rTermos, rPropostas] = await Promise.allSettled([
@@ -88,6 +79,10 @@ export default function ContratoDetalhePage() {
       setErroTermos(rTermos.status !== "fulfilled");
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) setNaoEncontrado(true);
+      else if (error instanceof ApiError && error.status === 403) {
+        setContrato(null);
+        setSemAcesso(true);
+      }
       else setErro(mensagemErro(error, "Não foi possível carregar este contrato."));
     } finally {
       setLoading(false);
