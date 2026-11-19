@@ -95,7 +95,7 @@ export function LinhaSolicitacao({
   const pendente = s.status === "PENDENTE";
   return (
     <li className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-100 py-4 last:border-b-0">
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-[1_1_18rem]">
         <div className="flex flex-wrap items-center gap-2">
           {mostrarSolicitante ? (
             <Link href={`/perfil/${s.solicitanteId}`} className="font-display text-[14.5px] font-semibold text-ink-900 hover:underline">

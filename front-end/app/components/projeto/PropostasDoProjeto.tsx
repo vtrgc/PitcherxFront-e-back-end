@@ -100,7 +100,7 @@ export default function PropostasDoProjeto({
             const situacao = situacaoNegociacao(p, daProposta, ehCriador ? "dono" : "outro");
             return (
               <li key={p.idProposta} className={`${cls.linha} flex flex-wrap items-start justify-between gap-3`}>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-[1_1_18rem]">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={cls.chip}>#{p.idProposta}</span>
                     <span className="text-[14px] font-bold text-ink-900">{formatarMoeda(p.valorProposta)}</span>

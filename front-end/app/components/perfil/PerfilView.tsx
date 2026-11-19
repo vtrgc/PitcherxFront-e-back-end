@@ -530,7 +530,9 @@ export default function PerfilView({ id, mostrarVoltar = false }: { id: number; 
             />
           </dl>
 
-          <div className="mt-5 grid grid-cols-2 gap-2 sm:hidden [&>*]:w-full [&>*:only-child]:col-span-2">{acoes}</div>
+          {/* No celular cada célula tem ~140px: textos longos ("Compartilhar", "Enviar mensagem")
+              quebram a linha em vez de espremer o ícone. */}
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:hidden [&>*]:w-full [&>*]:min-w-0 [&>*]:!px-3 [&>*]:!whitespace-normal [&>*]:!leading-tight [&>*]:text-center [&_svg]:shrink-0 [&>*:only-child]:col-span-2">{acoes}</div>
         </div>
       </section>
 

@@ -406,7 +406,7 @@ function PropostasConteudo() {
               const situacao = situacaoNegociacao(proposta, contrasDaProposta, souDonoDoProjeto ? "dono" : souAutor ? "autor" : "outro");
               return (
                 <li key={proposta.idProposta} className={`${cls.linha} flex flex-wrap items-start justify-between gap-3`}>
-                  <Link href={`/propostas/${proposta.idProposta}`} className="group min-w-0 flex-1">
+                  <Link href={`/propostas/${proposta.idProposta}`} className="group min-w-0 flex-[1_1_18rem]">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={cls.chip}>#{proposta.idProposta}</span>
                       <span className="text-[14px] font-bold text-ink-900">{formatarMoeda(proposta.valorProposta)}</span>

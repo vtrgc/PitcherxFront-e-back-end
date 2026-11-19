@@ -245,22 +245,45 @@ const PNG = Buffer.from(
           overflow: document.documentElement.scrollWidth - window.innerWidth,
           quebrada: /Application error|Unhandled Runtime Error|This page could not be found/.test(document.body.innerText) && !location.pathname.includes("inexistente"),
           imagensQuebradas: [...document.images].filter((i) => i.complete && i.naturalWidth === 0 && i.src && !i.src.startsWith("data:")).map((i) => i.src),
-          // Elementos visíveis que passam da largura da tela sem estar dentro de uma área com rolagem
-          // própria (cortados ou fora do lugar mesmo sem rolagem horizontal na página).
-          foraDaTela: [...document.querySelectorAll("body *")]
-            .filter((el) => {
-              const r = el.getBoundingClientRect();
-              if (r.width <= 1 || r.height <= 1 || (r.right <= window.innerWidth + 1 && r.left >= -1)) return false;
-              const cs = getComputedStyle(el);
-              if (cs.visibility === "hidden" || cs.display === "none" || cs.position === "fixed") return false;
-              for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
-                const ca = getComputedStyle(a);
-                if (ca.overflowX !== "visible" || ca.position === "fixed" || Number(ca.opacity) === 0) return false;
-              }
-              return true;
+          // Ícone que o layout encolheu por falta de espaço (botão estreito demais para o texto):
+          // largura de layout abaixo de 75% da declarada. Usa o estilo calculado, que não sofre
+          // efeito de transform/escala (animações da página inicial).
+          iconesEncolhidos: [...document.querySelectorAll("svg[width]")]
+            .filter((s) => {
+              const declarada = parseFloat(s.getAttribute("width"));
+              if (!declarada || s.getClientRects().length === 0) return false;
+              return parseFloat(getComputedStyle(s).width) < declarada * 0.75;
             })
             .slice(0, 3)
-            .map((el) => `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}.${String(el.className).split(" ").slice(0, 2).join(".")} (${Math.round(el.getBoundingClientRect().left)}→${Math.round(el.getBoundingClientRect().right)})`),
+            .map((s) => `${(s.getAttribute("class") || "svg").replace("lucide ", "").split(" ")[0]} ${parseFloat(getComputedStyle(s).width).toFixed(1)}/${s.getAttribute("width")}px em "${(s.closest("button,a") || s.parentElement).textContent.trim().slice(0, 25)}"`),
+          // Texto ou controle (link, botão, campo) que passa da borda da tela sem ter como ser
+          // alcançado: ignora o que está em contêiner com rolagem própria (carrossel, tabela), o que
+          // é cortado dentro da tela de propósito (reticências) e o que é decorativo/oculto.
+          // Validado injetando um parágrafo de 520px em <main> e em <form> a 360px: detectado.
+          foraDaTela: (() => {
+            const W = window.innerWidth;
+            const fora = (r) => r.right > W + 1 || r.left < -1;
+            const temTexto = (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+            const controle = (el) => /^(A|BUTTON|INPUT|SELECT|TEXTAREA|LABEL)$/.test(el.tagName);
+            return [...document.querySelectorAll("body *")]
+              .filter((el) => {
+                if (!temTexto(el) && !controle(el)) return false;
+                const r = el.getBoundingClientRect();
+                if (r.width <= 1 || r.height <= 1 || !fora(r)) return false;
+                const cs = getComputedStyle(el);
+                if (cs.visibility === "hidden" || cs.display === "none" || cs.position === "fixed" || Number(cs.opacity) === 0) return false;
+                for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+                  const ca = getComputedStyle(a);
+                  if (a.getAttribute("aria-hidden") === "true" || ca.position === "fixed" || Number(ca.opacity) === 0 || ca.visibility === "hidden") return false;
+                  if (/(auto|scroll)/.test(ca.overflowX)) return false;
+                  const ra = a.getBoundingClientRect();
+                  if (ca.overflowX !== "visible" && !fora(ra) && ra.width < W - 2) return false;
+                }
+                return true;
+              })
+              .slice(0, 3)
+              .map((el) => `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""} "${el.textContent.trim().slice(0, 30)}" (${Math.round(el.getBoundingClientRect().left)}→${Math.round(el.getBoundingClientRect().right)})`);
+          })(),
         }));
         if (PRINTS && t.movel) {
           require("fs").mkdirSync(PRINTS, { recursive: true });
@@ -271,6 +294,7 @@ const PNG = Buffer.from(
         if (erros.length) prob.push(...new Set(erros));
         if (info.overflow > 1) prob.push(`rolagem horizontal de ${info.overflow}px`);
         if (info.foraDaTela.length) prob.push(`fora da tela: ${info.foraDaTela.join(", ")}`);
+        if (info.iconesEncolhidos.length) prob.push(`ícone encolhido: ${info.iconesEncolhidos.join(", ")}`);
         if (info.quebrada) prob.push("página com erro");
         // Imagens de bancos externos (Unsplash) dependem da rede do ambiente: contadas à parte.
         const externas = info.imagensQuebradas.filter((src) => !src.startsWith(BASE) && !src.includes("localhost"));
