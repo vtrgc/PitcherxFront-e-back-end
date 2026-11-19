@@ -443,7 +443,9 @@ function FormularioPerfil({
             <p className="text-[13px] text-ink-500" aria-live="polite">
               {salvando ? "Salvando suas alterações…" : temAlteracoes ? "Você tem alterações não salvas." : "Nenhuma alteração pendente."}
             </p>
-            <div className="grid grid-cols-2 gap-2 sm:flex">
+            {/* No celular, "Cancelar" fica com o próprio tamanho e "Salvar alterações" com o resto
+                (em duas colunas iguais o texto não cabia e o ícone sumia). */}
+            <div className="grid grid-cols-[auto_1fr] gap-2 max-sm:[&>*]:!px-3 [&_svg]:shrink-0 sm:flex">
               <button type="button" onClick={cancelar} disabled={salvando} className={cls.btnContorno}>
                 Cancelar
               </button>

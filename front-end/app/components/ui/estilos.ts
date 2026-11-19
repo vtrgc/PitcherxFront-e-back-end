@@ -21,7 +21,8 @@ export const cls = {
     "inline-flex items-center justify-center w-[2.35rem] h-[2.35rem] rounded-full text-ink-500 transition-colors hover:-translate-y-px active:scale-[0.92] disabled:opacity-55 disabled:cursor-not-allowed hover:bg-brand-50 hover:text-brand-700",
   btnIconePerigo:
     "inline-flex items-center justify-center w-[2.35rem] h-[2.35rem] rounded-full text-ink-500 transition-colors hover:-translate-y-px active:scale-[0.92] disabled:opacity-55 disabled:cursor-not-allowed hover:bg-[#FEF2F2] hover:text-[#DC2626]",
-  eyebrow: "inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.1em] text-ink-500",
+  // [&>svg]:shrink-0: quando o texto quebra de linha (celular), o ícone mantém o tamanho.
+  eyebrow: "inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.1em] text-ink-500 [&>svg]:shrink-0",
   h1: "font-display mt-2 text-[1.75rem] font-extrabold leading-[1.2] tracking-[-0.02em] text-ink-900",
   h2: "font-display text-[1.1875rem] font-bold leading-[1.4] text-ink-900",
   texto: "text-[0.9375rem] leading-[1.65] text-ink-700",
